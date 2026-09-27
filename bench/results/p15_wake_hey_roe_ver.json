@@ -1,0 +1,20 @@
+{
+  "name": "p15_wake_hey_roe_ver",
+  "date": "2026-09-27T15:46:08",
+  "commit": "2cc28ef",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "clips": [
+    {
+      "clip": "assets/audio/HeyRover.wav",
+      "max_score": 0.915,
+      "frames_over_0.5": 5
+    },
+    {
+      "clip": "assets/audio/HeyJarvis.wav",
+      "max_score": 0.001,
+      "frames_over_0.5": 0
+    }
+  ],
+  "idle_cpu_percent": 16.9
+}
