@@ -53,6 +53,7 @@ MAXN SUPER, 2026-09-27, commit 359c2d2).
 | Camera | 820×616@30 | | | **30.0 fps** | — | **56%** core with numpy alpha-drop per frame; 23% without (BGRx kept). gi/Gst appsink, `drop=true max-buffers=1` |
 | Undistort (remap) | 820×616 | 2.1 ms | — | 471 fps equiv. | — | full-res 1640×1232: 13.5 ms — done once per Gemma query only |
 | YOLO11n TRT FP16 | 640, e2e + ByteTrack | 27.7 ms | — | **36.2 fps** | 1110 MB | model-only: 37.3 fps / 26.8 ms. Engine exported on-device (`scripts/export_yolo.sh`) |
+| whisper.cpp base.en | CUDA | 0.92 s | 0.93 s | — | 708 MB | 2.2 s on CPU (`--no-gpu`) → GPU wins. All 3 test clips transcribe correctly. whisper.cpp @ master, CUDA sm_87 |
 | Undistort (remap) | 820×616 | | | | | per-frame cost |
 | YOLO11n TRT FP16 | 640, e2e + ByteTrack | | | fps | | |
 | whisper.cpp base.en | CUDA | | | RTF | | WER |
