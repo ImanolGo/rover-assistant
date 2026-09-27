@@ -1,0 +1,563 @@
+{
+  "name": "p19_gemma_tools",
+  "date": "2026-09-27T16:07:16",
+  "commit": "cd23bf8",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "jinja_tools": {
+    "tool_acc_pct": 83,
+    "arg_acc_pct": 93,
+    "leaks": 0,
+    "wall_p50_s": 0.78,
+    "runs": [
+      {
+        "cmd": "go to the kitchen",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"kitchen\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.93
+      },
+      {
+        "cmd": "could you go to the sofa please",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"sofa\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.79
+      },
+      {
+        "cmd": "head over to the table",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"table\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.74
+      },
+      {
+        "cmd": "find the red cup",
+        "want": "go_to",
+        "got": "describe",
+        "args": "{\"question\":\"where is the red cup\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.81
+      },
+      {
+        "cmd": "i want the blue bottle, bring it here",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"blue bottle\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.78
+      },
+      {
+        "cmd": "navigate to the door",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"door\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.73
+      },
+      {
+        "cmd": "come to the bedroom",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"bedroom\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.73
+      },
+      {
+        "cmd": "follow me",
+        "want": "follow_person",
+        "got": "follow_person",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.5
+      },
+      {
+        "cmd": "stay behind me and keep up",
+        "want": "follow_person",
+        "got": "follow_person",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.51
+      },
+      {
+        "cmd": "come along with me",
+        "want": "follow_person",
+        "got": "",
+        "args": "",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 3.6
+      },
+      {
+        "cmd": "what do you see right now",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\":\"what do you see right now\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.84
+      },
+      {
+        "cmd": "describe the room",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\":\"the room\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.7
+      },
+      {
+        "cmd": "what's in front of you",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\":\"what's in front of you\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.9
+      },
+      {
+        "cmd": "is there a chair anywhere",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\":\"is there a chair anywhere\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.82
+      },
+      {
+        "cmd": "do you see any person around",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\":\"do you see any person around\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.84
+      },
+      {
+        "cmd": "stop",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.44
+      },
+      {
+        "cmd": "stop stop stop",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.4
+      },
+      {
+        "cmd": "freeze",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.39
+      },
+      {
+        "cmd": "halt right now",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.4
+      },
+      {
+        "cmd": "turn left ninety degrees",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"degrees\":90,\"direction\":\"left\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.82
+      },
+      {
+        "cmd": "rotate right 45 degrees",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"degrees\":45,\"direction\":\"right\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.82
+      },
+      {
+        "cmd": "look to your left",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"direction\":\"left\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.67
+      },
+      {
+        "cmd": "turn around",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"direction\":\"right\"}",
+        "arg_ok": false,
+        "leak": false,
+        "wall_s": 0.66
+      },
+      {
+        "cmd": "say hello to everyone",
+        "want": "say",
+        "got": "say",
+        "args": "{\"text\":\"hello to everyone\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.74
+      },
+      {
+        "cmd": "tell me the time out loud",
+        "want": "say",
+        "got": "say",
+        "args": "{\"text\":\"I do not have access to the current time.\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 1.0
+      },
+      {
+        "cmd": "announce that lunch is ready",
+        "want": "say",
+        "got": "say",
+        "args": "{\"text\":\"Lunch is ready!\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.78
+      },
+      {
+        "cmd": "um, the, uh, coffee thing",
+        "want": "go_to",
+        "got": "",
+        "args": "",
+        "arg_ok": false,
+        "leak": false,
+        "wall_s": 1.44
+      },
+      {
+        "cmd": "hey can you grab my charger",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\":\"charger\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.74
+      },
+      {
+        "cmd": "where is my phone",
+        "want": "go_to",
+        "got": "describe",
+        "args": "{\"question\":\"where is my phone\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.77
+      },
+      {
+        "cmd": "look for the potted plant",
+        "want": "go_to",
+        "got": "describe",
+        "args": "{\"question\":\"where is the potted plant\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.81
+      }
+    ]
+  },
+  "completion_fewshot": {
+    "tool_acc_pct": 90,
+    "arg_acc_pct": 93,
+    "leaks": 0,
+    "wall_p50_s": 0.83,
+    "runs": [
+      {
+        "cmd": "go to the kitchen",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"kitchen\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.95
+      },
+      {
+        "cmd": "could you go to the sofa please",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"sofa\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.86
+      },
+      {
+        "cmd": "head over to the table",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"table\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.82
+      },
+      {
+        "cmd": "find the red cup",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"red cup\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.86
+      },
+      {
+        "cmd": "i want the blue bottle, bring it here",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"blue bottle\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.87
+      },
+      {
+        "cmd": "navigate to the door",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"door\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.83
+      },
+      {
+        "cmd": "come to the bedroom",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"bedroom\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.84
+      },
+      {
+        "cmd": "follow me",
+        "want": "follow_person",
+        "got": "follow_person",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.61
+      },
+      {
+        "cmd": "stay behind me and keep up",
+        "want": "follow_person",
+        "got": "follow_person",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.61
+      },
+      {
+        "cmd": "come along with me",
+        "want": "follow_person",
+        "got": "follow_person",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.63
+      },
+      {
+        "cmd": "what do you see right now",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\": \"what do you see right now\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.96
+      },
+      {
+        "cmd": "describe the room",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\": \"the room\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.79
+      },
+      {
+        "cmd": "what's in front of you",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\": \"what's in front of you\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.97
+      },
+      {
+        "cmd": "is there a chair anywhere",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\": \"is there a chair anywhere\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.9
+      },
+      {
+        "cmd": "do you see any person around",
+        "want": "describe",
+        "got": "describe",
+        "args": "{\"question\": \"do you see any person around\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.94
+      },
+      {
+        "cmd": "stop",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.53
+      },
+      {
+        "cmd": "stop stop stop",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.53
+      },
+      {
+        "cmd": "freeze",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.54
+      },
+      {
+        "cmd": "halt right now",
+        "want": "stop",
+        "got": "stop",
+        "args": "{}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.55
+      },
+      {
+        "cmd": "turn left ninety degrees",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"direction\": \"left\", \"degrees\": 90}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 1.01
+      },
+      {
+        "cmd": "rotate right 45 degrees",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"direction\": \"right\", \"degrees\": 45}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 1.01
+      },
+      {
+        "cmd": "look to your left",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"direction\": \"left\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.75
+      },
+      {
+        "cmd": "turn around",
+        "want": "turn",
+        "got": "turn",
+        "args": "{\"direction\": \"around\"}",
+        "arg_ok": false,
+        "leak": false,
+        "wall_s": 0.75
+      },
+      {
+        "cmd": "say hello to everyone",
+        "want": "say",
+        "got": "say",
+        "args": "{\"text\": \"hello to everyone\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.82
+      },
+      {
+        "cmd": "tell me the time out loud",
+        "want": "say",
+        "got": "say",
+        "args": "{\"text\": \"the time\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.8
+      },
+      {
+        "cmd": "announce that lunch is ready",
+        "want": "say",
+        "got": "say",
+        "args": "{\"text\": \"lunch is ready\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.83
+      },
+      {
+        "cmd": "um, the, uh, coffee thing",
+        "want": "go_to",
+        "got": "describe",
+        "args": "{\"question\": \"the coffee thing\"}",
+        "arg_ok": false,
+        "leak": false,
+        "wall_s": 0.84
+      },
+      {
+        "cmd": "hey can you grab my charger",
+        "want": "go_to",
+        "got": "say",
+        "args": "{\"text\": \"can you grab my charger\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.91
+      },
+      {
+        "cmd": "where is my phone",
+        "want": "go_to",
+        "got": "describe",
+        "args": "{\"question\": \"where is my phone\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.86
+      },
+      {
+        "cmd": "look for the potted plant",
+        "want": "go_to",
+        "got": "go_to",
+        "args": "{\"target\": \"potted plant\"}",
+        "arg_ok": true,
+        "leak": false,
+        "wall_s": 0.9
+      }
+    ]
+  }
+}
