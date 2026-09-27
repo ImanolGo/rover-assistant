@@ -1,0 +1,19 @@
+{
+  "name": "p10_legacy_camera_pipeline",
+  "date": "2026-09-27T12:04:46",
+  "commit": "359c2d2",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "a_legacy_fullres_1640_bgr": {
+    "cpu_percent_one_core": 50.2,
+    "duration_s": 20
+  },
+  "b_downscale_820_bgr": {
+    "cpu_percent_one_core": 26.7,
+    "duration_s": 20
+  },
+  "c_downscale_820_bgrx_noconvert": {
+    "cpu_percent_one_core": 22.7,
+    "duration_s": 20
+  }
+}

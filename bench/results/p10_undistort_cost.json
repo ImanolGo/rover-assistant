@@ -1,0 +1,29 @@
+{
+  "name": "p10_undistort_cost",
+  "date": "2026-09-27T12:05:24",
+  "commit": "359c2d2",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "full_1640x1232": {
+    "resolution": "1640x1232",
+    "alpha": 1.0,
+    "ms_per_frame": 13.52,
+    "max_fps_if_every_frame": 74.0,
+    "output_shape": [
+      1232,
+      1640,
+      3
+    ]
+  },
+  "half_820x616": {
+    "resolution": "820x616",
+    "alpha": 1.0,
+    "ms_per_frame": 2.12,
+    "max_fps_if_every_frame": 471.0,
+    "output_shape": [
+      616,
+      820,
+      3
+    ]
+  }
+}
