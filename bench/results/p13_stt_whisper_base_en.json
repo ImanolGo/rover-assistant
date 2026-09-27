@@ -1,0 +1,28 @@
+{
+  "name": "p13_stt_whisper_base_en",
+  "date": "2026-09-27T15:42:12",
+  "commit": "5d2b43b",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "clips": [
+    {
+      "clip": "assets/audio/TheRainInSpain.wav",
+      "text": "The rain in Spain stays mainly in the plain.",
+      "p50_s": 0.918,
+      "p90_s": 0.932
+    },
+    {
+      "clip": "assets/audio/HeyRover.wav",
+      "text": "Hey Rover!",
+      "p50_s": 0.854,
+      "p90_s": 0.871
+    },
+    {
+      "clip": "assets/audio/HeyJarvis.wav",
+      "text": "Hey Jarvis!",
+      "p50_s": 0.862,
+      "p90_s": 0.867
+    }
+  ],
+  "peak_rss_mb": 708
+}
