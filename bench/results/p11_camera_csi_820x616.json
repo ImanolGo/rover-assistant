@@ -1,0 +1,15 @@
+{
+  "name": "p11_camera_csi_820x616",
+  "date": "2026-09-27T12:06:36",
+  "commit": "da5dc8c",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "fps": 30.0,
+  "cpu_percent_one_core": 56.2,
+  "frames": 601,
+  "frame_shape": [
+    616,
+    820,
+    3
+  ]
+}
