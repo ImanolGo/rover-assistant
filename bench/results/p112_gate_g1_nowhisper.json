@@ -1,0 +1,28 @@
+{
+  "name": "p112_gate_g1_nowhisper",
+  "date": "2026-09-27T19:03:39",
+  "commit": "3cacba2",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "duration_s": 600,
+  "vision_ok": 35,
+  "vision_fail": 0,
+  "planner_ok": 35,
+  "vision_p50_s": 1.12,
+  "vision_p90_s": 1.17,
+  "yolo_fps_median": 44.2,
+  "yolo_fps_during_gen_p50": 69.4,
+  "yolo_errors": 0,
+  "min_mem_available_mb": 0.0,
+  "swap_growth_mb": 991.2,
+  "csv": "bench/results/raw/g1_coexist_mem.csv",
+  "tegrastats_log": "bench/results/raw/g1_coexist_tegrastats.log",
+  "gate_checks": {
+    "no_oom": true,
+    "min_mem_available_mb>=800": false,
+    "swap_growth<100MB": false,
+    "yolo>=15fps_during_gen": true,
+    "vision_p90<=5s": true
+  },
+  "gate_pass": false
+}
