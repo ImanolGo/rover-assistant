@@ -1,0 +1,29 @@
+{
+  "name": "p18_gemma_audio",
+  "date": "2026-09-27T16:04:53",
+  "commit": "3478b49",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "runs": [
+    {
+      "clip": "TheRainInSpain.wav",
+      "transcript": "The rain in Spain stays mainly in the plain.",
+      "wer": 0.11,
+      "wall_p50_s": 0.6
+    },
+    {
+      "clip": "HeyRover.wav",
+      "transcript": "Hey rover.",
+      "wer": 0.5,
+      "wall_p50_s": 0.28
+    },
+    {
+      "clip": "HeyJarvis.wav",
+      "transcript": "hey jarvis",
+      "wer": 0.0,
+      "wall_p50_s": 0.29
+    }
+  ],
+  "mean_wer": 0.203,
+  "wall_p50_s": 0.29
+}
