@@ -1,0 +1,17 @@
+{
+  "name": "p12_yolo11n_trt_fp16",
+  "date": "2026-09-27T12:15:46",
+  "commit": "e4b418f",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "model_only": {
+    "fps": 37.3,
+    "ms_per_frame": 26.8,
+    "rss_mb": 1099
+  },
+  "with_bytetrack": {
+    "fps": 36.2,
+    "ms_per_frame": 27.66,
+    "rss_mb": 1110
+  }
+}
