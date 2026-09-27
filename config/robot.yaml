@@ -1,0 +1,101 @@
+# robot.yaml — every tunable in one place. Values marked (legacy) are measured
+# facts carried over from local-ai-robot-assistant; (tune) means calibrate on
+# the robot in Phase 6.
+
+sim: false                      # ROVER_SIM=1 overrides to true
+
+camera:
+  backend: csi                  # csi | usb | file
+  sensor_id: 0
+  capture: [1640, 1232]         # (legacy) calibrated resolution
+  output: [820, 616]            # nvvidconv hardware downscale (exactly 0.5x)
+  fps: 30
+  flip_method: 0                # (legacy default) set 2 if mounted upside down
+  calibration_file: config/camera_calibration.yaml
+  undistort_alpha: 1.0          # (legacy) for frames sent to Gemma only
+  usb_index: 0                  # used when backend=usb
+  file_path: bench/data/frames  # used when backend=file
+
+perception:
+  engine: models/yolo_trt/yolo11n_fp16.engine
+  weights_fallback: models/yolo11n.pt   # laptop
+  imgsz: 640
+  conf: 0.35
+  tracker: bytetrack.yaml
+  target_classes_h_stop:        # (tune) box height fraction at which to stop
+    cup: 0.40
+    bottle: 0.45
+    chair: 0.70
+    person: 0.60
+    default: 0.45
+
+rover:
+  backend: serial               # serial | dryrun
+  port: /dev/ttyTHS1            # (legacy) confirmed working; /dev/ttyUSB0 if the USB board is used
+  baudrate: 115200
+  rts_dtr_false: true           # (legacy)
+  write_hz: 20
+  watchdog_s: 0.5
+  speed_cap: 0.15               # on firmware 0..0.5 scale; raise only after field tests
+  min_wheel_pwm: 0.30           # (legacy) deadband: no motion below ~0.25
+  feedback: true                # T=131 continuous feedback (battery, IMU)
+  gyro_bias_calibrate_s: 2.0    # (legacy) ~0.36 rad/s bias
+  low_battery_v: 10.5           # (tune) legacy saw 12.2 V charged, ~10.0 V flat
+
+control:
+  tick_hz: 10
+  kp_turn: 0.9                  # (tune)
+  bearing_deadband_deg: 3
+  approach_max_bearing_deg: 15
+  v_max: 0.15
+  search_step_deg: 35
+  search_pause_s: 0.5
+  search_max_steps: 12
+  lost_reacquire_s: 1.0
+  follow_h_frac: [0.50, 0.65]   # (tune) ~1-1.5 m
+  follow_lost_give_up_s: 5.0
+  verify_frames: 3
+  verify_min_conf: 0.5
+  max_replans: 2
+
+audio:
+  mic_name: "USB PnP Sound Device"   # (legacy) select by name, card numbers move
+  speaker_name: "UACDemoV1.0"        # (legacy) native 48 kHz stereo S16
+  mic_rate: 16000
+  speaker_rate: 48000
+  speaker_channels: 2
+  frame_ms: 80
+
+voice:
+  wakeword_model: models/wake_word/hey_roe_ver.onnx   # (legacy)
+  wakeword_threshold: 0.5
+  speex_noise_suppression: true       # (legacy)
+  vad_threshold: 0.5                  # (legacy)
+  end_silence_ms: 800
+  max_utterance_s: 10
+  stt_backend: whispercpp             # whispercpp | gemma  (decided in Phase 1)
+  whisper_model: models/whisper/ggml-base.en.bin
+  tts_voice: models/piper/en_US-lessac-medium.onnx     # (legacy voice)
+  wake_sound: assets/audio/notify_asc.wav
+
+planner:
+  url: http://127.0.0.1:8080        # llama-server
+  fallback_url: null                # optional LAN GPU server
+  mode: jinja_tools                 # jinja_tools | completion_fewshot  (decided by bench 1.9)
+  max_tokens: 96
+  temperature: 0.2
+  image_max_tokens: 70
+  timeout_s: 8
+
+llama_server:                       # used by deploy/systemd/rover-llama.service
+  binary: ~/llama.cpp/build/bin/llama-server
+  model: models/gemma/gemma-4-E2B-it-Q4_K_M.gguf
+  mmproj: models/gemma/mmproj-gemma4-e2b-f16.gguf
+  args: "-c 2048 -ngl 99 --flash-attn on --jinja -np 1 --image-min-tokens 70 --image-max-tokens 70 --host 127.0.0.1 --port 8080"
+
+api:
+  host: 0.0.0.0
+  port: 8000
+
+telemetry:
+  decisions_dir: logs
