@@ -1,0 +1,9 @@
+models/
+*.engine
+*.gguf
+bench/results/raw/
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+logs/

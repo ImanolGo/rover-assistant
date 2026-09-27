@@ -1,0 +1,45 @@
+[project]
+name = "rover-assistant"
+version = "0.1.0"
+description = "Single-process Jetson rover assistant (Gemma + YOLO, no ROS2)"
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "pyserial",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "pyyaml",
+    "sounddevice",
+    "soundfile",
+    "openwakeword",
+    "silero-vad",
+    "piper-tts",
+    "ultralytics",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "black"]
+laya = ["laya"]
+
+[project.scripts]
+rover = "rover.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rover"]
+
+[tool.ruff]
+line-length = 100
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.black]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
