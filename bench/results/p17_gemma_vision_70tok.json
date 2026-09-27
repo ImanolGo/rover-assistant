@@ -1,0 +1,132 @@
+{
+  "name": "p17_gemma_vision_70tok",
+  "date": "2026-09-27T16:03:32",
+  "commit": "426f827",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "runs": [
+    {
+      "img": "bus.jpg",
+      "q": "Describe this street scene in ",
+      "wall_s": 1.86,
+      "prompt_ms": 801,
+      "correct": true,
+      "answer": "A group of people is gathered on a paved street, with a large bus prom"
+    },
+    {
+      "img": "demo01.jpg",
+      "q": "How many people are in this im",
+      "wall_s": 4.88,
+      "prompt_ms": 312,
+      "correct": true,
+      "answer": "Based on the image, here is an estimation of the number of people and "
+    },
+    {
+      "img": "bus.jpg",
+      "q": "What colour is the bus?",
+      "wall_s": 0.72,
+      "prompt_ms": 289,
+      "correct": true,
+      "answer": "The bus is **blue**."
+    },
+    {
+      "img": "bus.jpg",
+      "q": "Describe this street scene in ",
+      "wall_s": 1.23,
+      "prompt_ms": 303,
+      "correct": true,
+      "answer": "A group of people is gathered on a paved street, with a large bus prom"
+    },
+    {
+      "img": "demo01.jpg",
+      "q": "How many people are in this im",
+      "wall_s": 4.76,
+      "prompt_ms": 277,
+      "correct": true,
+      "answer": "Based on the image, here is an estimation of the number of people and "
+    },
+    {
+      "img": "bus.jpg",
+      "q": "What colour is the bus?",
+      "wall_s": 0.65,
+      "prompt_ms": 279,
+      "correct": true,
+      "answer": "The bus is **blue**."
+    },
+    {
+      "img": "bus.jpg",
+      "q": "Describe this street scene in ",
+      "wall_s": 1.36,
+      "prompt_ms": 291,
+      "correct": true,
+      "answer": "A group of people is standing on a paved street in front of a building"
+    },
+    {
+      "img": "demo01.jpg",
+      "q": "How many people are in this im",
+      "wall_s": 4.78,
+      "prompt_ms": 286,
+      "correct": true,
+      "answer": "Based on the image, here is an estimation of the number of people and "
+    },
+    {
+      "img": "bus.jpg",
+      "q": "What colour is the bus?",
+      "wall_s": 0.65,
+      "prompt_ms": 279,
+      "correct": true,
+      "answer": "The bus is **blue**."
+    },
+    {
+      "img": "bus.jpg",
+      "q": "Describe this street scene in ",
+      "wall_s": 1.25,
+      "prompt_ms": 292,
+      "correct": true,
+      "answer": "A group of people is gathered on a paved street, with a large white bu"
+    },
+    {
+      "img": "demo01.jpg",
+      "q": "How many people are in this im",
+      "wall_s": 4.78,
+      "prompt_ms": 283,
+      "correct": true,
+      "answer": "Based on the image provided, here is an estimation of the number of pe"
+    },
+    {
+      "img": "bus.jpg",
+      "q": "What colour is the bus?",
+      "wall_s": 0.73,
+      "prompt_ms": 312,
+      "correct": true,
+      "answer": "The bus is **blue**."
+    },
+    {
+      "img": "bus.jpg",
+      "q": "Describe this street scene in ",
+      "wall_s": 1.3,
+      "prompt_ms": 298,
+      "correct": true,
+      "answer": "A group of people is gathered on a paved street, with a large bus park"
+    },
+    {
+      "img": "demo01.jpg",
+      "q": "How many people are in this im",
+      "wall_s": 4.83,
+      "prompt_ms": 287,
+      "correct": true,
+      "answer": "Based on the image, here is an estimation of the number of people and "
+    },
+    {
+      "img": "bus.jpg",
+      "q": "What colour is the bus?",
+      "wall_s": 0.7,
+      "prompt_ms": 281,
+      "correct": true,
+      "answer": "The bus is **blue**."
+    }
+  ],
+  "wall_p50_s": 1.3,
+  "wall_p90_s": 4.83,
+  "correct_pct": 100
+}
