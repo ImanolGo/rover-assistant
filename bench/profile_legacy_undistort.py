@@ -25,9 +25,7 @@ def load_calibration(path: str):
 
 def remap_cost(w: int, h: int, K, D, alpha: float, n: int = 60) -> dict:
     newK, _ = cv2.getOptimalNewCameraMatrix(K, D, (w, h), alpha, (w, h))
-    map1, map2 = cv2.initUndistortRectifyMap(
-        K, D, None, newK, (w, h), cv2.CV_32FC1
-    )
+    map1, map2 = cv2.initUndistortRectifyMap(K, D, None, newK, (w, h), cv2.CV_32FC1)
     frame = np.random.randint(0, 255, (h, w, 3), dtype=np.uint8)
     # warmup
     for _ in range(5):
@@ -57,5 +55,6 @@ if __name__ == "__main__":
     }
     for name, r in results.items():
         print(name, r)
-    print(f"\nLegacy did this EVERY frame at full res; new design: {results['half_820x616']['ms_per_frame']} ms only on Gemma queries.")
+    ms = results["half_820x616"]["ms_per_frame"]
+    print(f"\nLegacy remapped EVERY frame at full res; new design: {ms} ms, Gemma queries only.")
     print(write_result("p10_undistort_cost", results))

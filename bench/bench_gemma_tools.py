@@ -69,15 +69,67 @@ TOOLS = [
             },
         },
     },
-    {"type": "function", "function": {"name": "follow_person", "description": "Follow the person.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "describe", "description": "Answer a question about what the camera sees.", "parameters": {"type": "object", "properties": {"question": {"type": "string"}}, "required": ["question"]}}},
-    {"type": "function", "function": {"name": "stop", "description": "Stop all motion immediately.", "parameters": {"type": "object", "properties": {}}}},
-    {"type": "function", "function": {"name": "turn", "description": "Turn in place.", "parameters": {"type": "object", "properties": {"direction": {"type": "string", "enum": ["left", "right"]}, "degrees": {"type": "number"}}, "required": ["direction"]}}},
-    {"type": "function", "function": {"name": "say", "description": "Speak a sentence aloud.", "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}},
+    {
+        "type": "function",
+        "function": {
+            "name": "follow_person",
+            "description": "Follow the person.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "describe",
+            "description": "Answer a question about what the camera sees.",
+            "parameters": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}},
+                "required": ["question"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stop",
+            "description": "Stop all motion immediately.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "turn",
+            "description": "Turn in place.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "direction": {"type": "string", "enum": ["left", "right"]},
+                    "degrees": {"type": "number"},
+                },
+                "required": ["direction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "say",
+            "description": "Speak a sentence aloud.",
+            "parameters": {
+                "type": "object",
+                "properties": {"text": {"type": "string"}},
+                "required": ["text"],
+            },
+        },
+    },
 ]
 
-FEWSHOT = """You convert a spoken robot command into exactly one JSON tool call. Output ONLY the JSON object, nothing else.
-Tools: go_to(target[, attributes]), follow_person(), describe(question), stop(), turn(direction[, degrees]), say(text).
+FEWSHOT = """You convert a spoken robot command into exactly one JSON tool call.
+Output ONLY the JSON object, nothing else.
+Tools: go_to(target[, attributes]), follow_person(), describe(question),
+stop(), turn(direction[, degrees]), say(text).
 Examples:
 User: go to the kitchen
 {{"tool": "go_to", "target": "kitchen"}}

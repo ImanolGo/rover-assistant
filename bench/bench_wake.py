@@ -34,12 +34,15 @@ def score_clip(model, path: str) -> dict:
         pred = model.predict(data[i : i + chunk])
         scores.append(max(pred.values()))
     model.reset()
-    return {"clip": path, "max_score": round(float(max(scores)), 3), "frames_over_0.5": int(np.sum(np.array(scores) > 0.5))}
+    return {
+        "clip": path,
+        "max_score": round(float(max(scores)), 3),
+        "frames_over_0.5": int(np.sum(np.array(scores) > 0.5)),
+    }
 
 
 def idle_cpu(model, seconds: float = 15.0) -> float:
     """Stream silence at 80 ms frames, measuring CPU% of this process."""
-    import os
 
     def jiffies():
         parts = open("/proc/self/stat").read().rsplit(") ", 1)[1].split()
@@ -65,4 +68,6 @@ if __name__ == "__main__":
     print(scores)
     cpu = idle_cpu(m)
     print(f"idle-listening CPU: {cpu:.0f}% of one core")
-    print(write_result("p15_wake_hey_roe_ver", {"clips": scores, "idle_cpu_percent": round(cpu, 1)}))
+    print(
+        write_result("p15_wake_hey_roe_ver", {"clips": scores, "idle_cpu_percent": round(cpu, 1)})
+    )

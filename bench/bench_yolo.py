@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""bench 1.2: YOLO11n TensorRT FP16 imgsz 640 — model-only and end-to-end FPS, with/without ByteTrack.
+"""bench 1.2: YOLO11n TRT FP16 imgsz 640 — model-only and e2e FPS, with/without ByteTrack.
 
 End-to-end = pre (letterbox/normalize) + inference + post (NMS). RSS recorded.
 """

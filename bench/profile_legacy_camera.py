@@ -75,7 +75,7 @@ if __name__ == "__main__":
     for name, desc in VARIANTS.items():
         results[name] = run_variant(name, desc)
 
-    # fakesink frees buffers immediately; CPU here is nvvidconv(BGRx in HW) + videoconvert(CPU) + copies.
+    # fakesink frees buffers immediately; CPU is nvvidconv(HW) + videoconvert(CPU) + copies.
     # Expected from ARCHITECTURE §10: (a) is 3-4x the CPU of (b); (c) ~0.
     path = write_result("p10_legacy_camera_pipeline", results)
     print(f"\nwrote {path}")

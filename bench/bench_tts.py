@@ -28,7 +28,7 @@ OUT_DIR = Path("bench/results/raw/piper")
 
 
 def synth(sentence: str, idx: int) -> tuple[float, float]:
-    """Returns (ttfa_s, rtf) — TTFA approximated by load+first sentence; RTF = synth_time / audio_time."""
+    """Returns (synth_s, rtf, audio_s). RTF = synthesis time / audio duration."""
     out = OUT_DIR / f"s{idx}.wav"
     t0 = time.perf_counter()
     subprocess.run(
@@ -53,7 +53,12 @@ if __name__ == "__main__":
     for i, s in enumerate(SENTENCES):
         elapsed, rtf, audio_s = synth(s, i)
         rows.append(
-            {"sentence": s[:40], "synth_s": round(elapsed, 2), "audio_s": round(audio_s, 2), "rtf": round(rtf, 2)}
+            {
+                "sentence": s[:40],
+                "synth_s": round(elapsed, 2),
+                "audio_s": round(audio_s, 2),
+                "rtf": round(rtf, 2),
+            }
         )
         print(rows[-1])
 

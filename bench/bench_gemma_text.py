@@ -17,7 +17,7 @@ import httpx
 URL = "http://127.0.0.1:8080"
 PLANNER_PROMPT = (
     "You are the planner of a home robot. The user says: "
-    "\"um, could you bring me the, uh, the red thing I drink coffee from?\" "
+    '"um, could you bring me the, uh, the red thing I drink coffee from?" '
     "Available tools: go_to(target, attributes[]), follow_person(), describe(question), "
     "stop(), turn(direction, degrees), say(text). "
     "Respond with exactly one JSON tool call, no prose. Think about synonyms and "

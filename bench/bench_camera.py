@@ -12,9 +12,8 @@ import sys
 import threading
 import time
 
-import numpy as np
-
 import gi
+import numpy as np
 
 gi.require_version("Gst", "1.0")
 from gi.repository import Gst  # noqa: E402

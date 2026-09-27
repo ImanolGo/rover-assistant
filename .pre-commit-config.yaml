@@ -1,0 +1,33 @@
+# Pre-commit: same checks as CI (.github/workflows/ci.yml).
+# Install once: uv run pre-commit install  (or: pip install pre-commit && pre-commit install)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=500"]  # models/engines are gitignored anyway
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+
+  # pytest as a local hook: fast suite, laptop-only, must pass at every commit (AGENTS.md rule 9).
+  # ROS2 Humble PYTHONPATH is scrubbed — the venv must not see ROS plugins (no ROS in this project).
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest (laptop-only suite)
+        entry: bash -c 'PYTHONPATH=$(echo "$PYTHONPATH" | tr ":" "\n" | grep -v "/opt/ros/" | paste -sd:) .venv/bin/python -m pytest -q'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

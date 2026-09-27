@@ -27,7 +27,11 @@ IMAGES = [
 ]
 
 # expected keyword checks (loose "correctness")
-CHECKS = {0: ["pedestrian", "people", "person", "walk"], 1: ["two", "2", "men", "people"], 2: ["blue"]}
+CHECKS = {
+    0: ["pedestrian", "people", "person", "walk"],
+    1: ["two", "2", "men", "people"],
+    2: ["blue"],
+}
 
 
 def make_unique(path: str, seed: int) -> str:
@@ -51,7 +55,10 @@ def vision_query(image_b64: str, question: str, timeout: float = 60.0) -> tuple[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
+                        },
                         {"type": "text", "text": question},
                     ],
                 }

@@ -12,7 +12,6 @@ import json
 import statistics
 import sys
 import time
-import wave
 
 import httpx
 
@@ -28,8 +27,8 @@ def wav_to_b64_16k(path: str) -> str:
     """Resample to 16 kHz mono wav, return b64 (Gemma audio needs 16 kHz)."""
     import io
 
-    import soundfile as sf
     import scipy.signal
+    import soundfile as sf
 
     data, sr = sf.read(path, dtype="float32")
     if data.ndim > 1:
@@ -50,7 +49,13 @@ def audio_query(b64: str, prompt: str) -> tuple[dict, float]:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "input_audio", "input_audio": {"data": f"data:audio/wav;base64,{b64}", "format": "wav"}},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": f"data:audio/wav;base64,{b64}",
+                                "format": "wav",
+                            },
+                        },
                         {"type": "text", "text": prompt},
                     ],
                 }

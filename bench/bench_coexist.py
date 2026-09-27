@@ -41,7 +41,6 @@ VISION_EVERY_S = 15
 
 class YoloLoop:
     def __init__(self):
-        import cv2
         import gi
 
         gi.require_version("Gst", "1.0")
@@ -100,7 +99,9 @@ class YoloLoop:
                 continue
             rgb = cv2.cvtColor(fr, cv2.COLOR_BGR2RGB)
             try:
-                self.model.track(rgb, persist=True, tracker="bytetrack.yaml", imgsz=640, verbose=False)
+                self.model.track(
+                    rgb, persist=True, tracker="bytetrack.yaml", imgsz=640, verbose=False
+                )
             except Exception as e:  # noqa: BLE001
                 self.errors.append(str(e))
             now = time.perf_counter()
@@ -132,8 +133,14 @@ def vision_query(b64: str) -> tuple[bool, float, str]:
                     {
                         "role": "user",
                         "content": [
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
-                            {"type": "text", "text": "Describe this noise pattern in one short sentence."},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                            },
+                            {
+                                "type": "text",
+                                "text": "Describe this noise pattern in one short sentence.",
+                            },
                         ],
                     }
                 ],
@@ -163,7 +170,10 @@ def planner_call() -> bool:
                         "type": "function",
                         "function": {
                             "name": "go_to",
-                            "parameters": {"type": "object", "properties": {"target": {"type": "string"}}},
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"target": {"type": "string"}},
+                            },
                         },
                     }
                 ],
@@ -196,8 +206,12 @@ if __name__ == "__main__":
         whisper_proc = subprocess.Popen(
             [
                 "/home/imanolgo/whisper.cpp/build/bin/whisper-server",
-                "-m", "models/whisper/ggml-base.en.bin",
-                "--host", "127.0.0.1", "--port", "8081",
+                "-m",
+                "models/whisper/ggml-base.en.bin",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8081",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -217,7 +231,12 @@ if __name__ == "__main__":
         try:
             import httpx as _hx
 
-            _hx.post("http://127.0.0.1:8081/inference", files={"file": b"RIFF"}, data={"response_format": "text"}, timeout=15)
+            _hx.post(
+                "http://127.0.0.1:8081/inference",
+                files={"file": b"RIFF"},
+                data={"response_format": "text"},
+                timeout=15,
+            )
             print("whisper-server reachable")
         except Exception as e:  # noqa: BLE001
             print("whisper-server probe:", str(e)[:80])
@@ -258,9 +277,13 @@ if __name__ == "__main__":
         "vision_fail": oom,
         "planner_ok": n_plan,
         "vision_p50_s": round(statistics.median(vision_lat), 2) if vision_lat else None,
-        "vision_p90_s": round(sorted(vision_lat)[int(len(vision_lat) * 0.9)], 2) if vision_lat else None,
+        "vision_p90_s": (
+            round(sorted(vision_lat)[int(len(vision_lat) * 0.9)], 2) if vision_lat else None
+        ),
         "yolo_fps_median": round(statistics.median(fps_all), 1),
-        "yolo_fps_during_gen_p50": round(statistics.median(fps_during_gen), 1) if fps_during_gen else None,
+        "yolo_fps_during_gen_p50": (
+            round(statistics.median(fps_during_gen), 1) if fps_during_gen else None
+        ),
         "yolo_errors": len(yolo.errors),
         **mem,
     }
