@@ -1,0 +1,42 @@
+{
+  "name": "p14_tts_piper",
+  "date": "2026-09-27T15:43:55",
+  "commit": "c6a501f",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "sentences": [
+    {
+      "sentence": "Looking for the red cup.",
+      "synth_s": 2.22,
+      "audio_s": 1.32,
+      "rtf": 1.68
+    },
+    {
+      "sentence": "I found the cup and I am on my way.",
+      "synth_s": 2.18,
+      "audio_s": 1.88,
+      "rtf": 1.16
+    },
+    {
+      "sentence": "I have arrived at the cup.",
+      "synth_s": 2.15,
+      "audio_s": 1.53,
+      "rtf": 1.4
+    },
+    {
+      "sentence": "Sorry, I lost you. Say follow me when yo",
+      "synth_s": 2.31,
+      "audio_s": 2.9,
+      "rtf": 0.8
+    },
+    {
+      "sentence": "Hey Rover is at your service. What do yo",
+      "synth_s": 2.43,
+      "audio_s": 2.64,
+      "rtf": 0.92
+    }
+  ],
+  "p50_synth_s": 2.22,
+  "p50_rtf": 1.16,
+  "rss_mb": 147
+}
