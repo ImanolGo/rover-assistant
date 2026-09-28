@@ -1,0 +1,40 @@
+{"id":"s01","state":"mission=go_to cup(red). target_visible=no. search_steps=2/12. lost_for_s=0. last_skill=SEARCH. elapsed_s=8","label":"SEARCH"}
+{"id":"s02","state":"mission=go_to cup(red). target_visible=yes. bearing_deg=-18. h_frac=0.12. track_age_s=1.4. last_skill=SEARCH","label":"APPROACH"}
+{"id":"s03","state":"mission=go_to cup(red). target_visible=yes. bearing_deg=2. h_frac=0.41. h_stop=0.40. last_skill=APPROACH","label":"VERIFY"}
+{"id":"s04","state":"mission=go_to cup(red). target_visible=no. lost_for_s=1.6. last_bearing_deg=25. last_skill=APPROACH","label":"REACQUIRE"}
+{"id":"s05","state":"mission=go_to cup(red). verify_result=no. replans=1/2. last_skill=VERIFY","label":"BACK_OFF"}
+{"id":"s06","state":"mission=go_to plant. target_in_vocab=no. target_visible=unknown. search_steps=12/12","label":"ASK_PLANNER"}
+{"id":"s07","state":"mission=go_to bottle. target_visible=no. search_steps=0/12. last_skill=PLAN","label":"SEARCH"}
+{"id":"s08","state":"mission=go_to bottle. target_visible=yes. bearing_deg=5. h_frac=0.08. track_age_s=0.3. last_skill=SEARCH","label":"APPROACH"}
+{"id":"s09","state":"mission=go_to chair. target_visible=yes. bearing_deg=-1. h_frac=0.68. h_stop=0.70. last_skill=APPROACH","label":"VERIFY"}
+{"id":"s10","state":"mission=go_to chair. target_visible=no. lost_for_s=0.9. last_bearing_deg=-30. last_skill=APPROACH","label":"REACQUIRE"}
+{"id":"s11","state":"mission=go_to chair. verify_result=no. replans=2/2. last_skill=VERIFY","label":"BACK_OFF"}
+{"id":"s12","state":"mission=go_to thingamajig. target_in_vocab=no. target_visible=unknown. search_steps=0/12","label":"ASK_PLANNER"}
+{"id":"s13","state":"mission=go_to person. target_visible=yes. bearing_deg=0. h_frac=0.55. h_band=[0.50,0.65]. last_skill=APPROACH","label":"APPROACH"}
+{"id":"s14","state":"mission=follow_person. target_visible=yes. bearing_deg=12. h_frac=0.35. lost_for_s=0. last_skill=FOLLOW","label":"APPROACH"}
+{"id":"s15","state":"mission=follow_person. target_visible=no. lost_for_s=1.3. last_bearing_deg=-15. last_skill=FOLLOW","label":"REACQUIRE"}
+{"id":"s16","state":"mission=follow_person. target_visible=no. lost_for_s=5.5. give_up_after=5.0. last_skill=REACQUIRE","label":"ABORT"}
+{"id":"s17","state":"mission=follow_person. target_visible=yes. bearing_deg=-3. h_frac=0.58. h_band=[0.50,0.65]. last_skill=FOLLOW","label":"APPROACH"}
+{"id":"s18","state":"mission=describe. camera_frame=fresh. question=what do you see. last_skill=PLAN","label":"ASK_PLANNER"}
+{"id":"s19","state":"mission=go_to cup(red). target_visible=yes. bearing_deg=40. h_frac=0.20. |bearing|>approach_max=15. last_skill=SEARCH","label":"APPROACH"}
+{"id":"s20","state":"mission=go_to cup(red). verify_result=yes. all_checks_passed. last_skill=VERIFY","label":"DONE"}
+{"id":"s21","state":"mission=go_to bottle. target_visible=yes. bearing_deg=-7. h_frac=0.44. h_stop=0.45. last_skill=APPROACH","label":"VERIFY"}
+{"id":"s22","state":"mission=go_to bottle. verify_result=no. replans=0/2. last_skill=VERIFY","label":"BACK_OFF"}
+{"id":"s23","state":"mission=go_to plant. target_visible=no. search_steps=7/12. lost_for_s=0. last_skill=SEARCH","label":"SEARCH"}
+{"id":"s24","state":"mission=go_to plant. target_visible=yes. bearing_deg=1. h_frac=0.71. h_stop=0.70. last_skill=APPROACH","label":"VERIFY"}
+{"id":"s25","state":"mission=go_to TV. target_in_vocab=no. search_steps=12/12. user_waiting=yes","label":"ASK_PLANNER"}
+{"id":"s26","state":"mission=go_to sofa. target_visible=no. search_steps=11/12. lost_for_s=0. last_skill=SEARCH","label":"SEARCH"}
+{"id":"s27","state":"mission=go_to sofa. verify_result=no. replans=1/2. last_skill=VERIFY. obstacle_ahead=no","label":"BACK_OFF"}
+{"id":"s28","state":"mission=go_to sofa. verify_result=no. replans=2/2. last_skill=VERIFY. obstacle_ahead=yes","label":"ABORT"}
+{"id":"s29","state":"mission=turn(left,90). turning_done=yes. last_skill=TURN","label":"DONE"}
+{"id":"s30","state":"mission=go_to mug. target_visible=yes. bearing_deg=3. h_frac=0.30. track_age_s=0.1. last_skill=APPROACH","label":"APPROACH"}
+{"id":"s31","state":"mission=go_to mug. target_visible=no. lost_for_s=1.1. last_bearing_deg=90. last_skill=APPROACH","label":"REACQUIRE"}
+{"id":"s32","state":"mission=go_to mug. target_visible=no. lost_for_s=8.0. last_bearing_deg=90. last_skill=REACQUIRE. search_steps=0/12","label":"SEARCH"}
+{"id":"s33","state":"mission=go_to remote. target_visible=no. target_in_vocab=yes. search_steps=5/12. last_skill=REACQUIRE","label":"SEARCH"}
+{"id":"s34","state":"mission=follow_person. target_visible=yes. bearing_deg=2. h_frac=0.75. h_band=[0.50,0.65]. too_close=yes","label":"APPROACH"}
+{"id":"s35","state":"mission=go_to cup(red). battery_v=10.2. low_battery_threshold=10.5","label":"ABORT"}
+{"id":"s36","state":"mission=go_to cup(red). target_visible=yes. bearing_deg=-2. h_frac=0.39. verify_frames=2/3. last_skill=VERIFY","label":"VERIFY"}
+{"id":"s37","state":"mission=describe. camera_frame=stale. paused=yes. last_skill=PLAN","label":"ASK_PLANNER"}
+{"id":"s38","state":"mission=go_to door. target_visible=yes. bearing_deg=-25. h_frac=0.15. track_age_s=2.0. last_skill=SEARCH","label":"APPROACH"}
+{"id":"s39","state":"mission=go_to door. verify_result=yes. spoken=arrived. last_skill=VERIFY","label":"DONE"}
+{"id":"s40","state":"mission=go_to keys. target_in_vocab=no. target_visible=unknown. search_steps=3/12. gemma_asked_before=no","label":"ASK_PLANNER"}
