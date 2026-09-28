@@ -104,18 +104,25 @@ the next fallback is #6 (LAN GPU) — but per the decomposition, expected result
 is PASS. Decision on STT (whisper vs Gemma audio) is deferred to that re-run:
 both work (whisper 0.92 s/WER-good, Gemma audio 0.29 s/WER 0.20).
 
-### Laya
+### Laya (Phase 1b, 2026-09-28, commit 31aff08)
 | Checkpoint | Device/dtype | Load s | Mem | 1q p50 | 5q p50 | 10q p50 | Acc (40 cases) | Under G1 load |
 |---|---|---|---|---|---|---|---|---|
-| english | cpu fp32 | | | | | | | — |
-| english | cuda fp16 | | | | | | | |
-| multilingual | cpu fp32 | | | | | | | — |
-| multilingual | cuda fp16 | | | | | | | |
-| english | onnx cpu | | | | | | | — |
-| RuleSelector | — | — | — | | — | — | | — |
-| Gemma E2B | — | — | — | | — | — | | — |
+| english | cpu fp32 | 21.6 | 2140 MB | **10.5 s** | 61.7 s | 123.5 s | 28% | — |
+| english | cuda fp16 | 12.0 | 3.9 GB RSS / 1.6 GB GPU | **0.077 s** | 0.184 s | 0.344 s | 28% | not re-tested: see verdict |
+| multilingual | cpu fp32 | — | — | — | — | — | — | — (CPU cost already disqualifying) |
+| multilingual | cuda fp16 | 16.0 | 3.2 GB RSS / 1.3 GB GPU | 0.069 s | 0.104 s | 0.157 s | 18% | — |
+| english | onnx cpu | — | — | — | — | — | — | needs manual `export_onnx.py`; skipped (informational) |
+| RuleSelector (draft) | — | — | — | <1 ms | — | — | **75%** | — |
+| Gemma E2B zero-shot | llama-server | resident | — | 0.46 s | — | — | 55% | — |
 
-**Laya verdict:** _(fill after Phase 1b / Phase 5 re-run)_
+**Laya verdict:** fast on GPU (~70 ms) but **near-chance zero-shot on the skill-selection task
+(18–28% over 8 classes; chance = 12.5%)**, and unusable on CPU (10.5 s for 1 question —
+421M-param ModernBERT). Matches the plan's expected outcome: Laya becomes a **Phase 8
+distillation experiment**, not a runtime dependency. The real RuleSelector (Phase 5) is
+the runtime selector; a 5-minute offline rule draft already scores 75% on the same cases.
+Selector comparison result: `bench/results/p1b_selector_comparison.json`.
+Bench bug fixed along the way: multilingual must be loaded via `Agent(subfolder=...)`;
+routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 
 ### Legacy baseline (from the legacy repo, docs/model_performance.md + STATUS.md, Sep 2026)
 | Item | Value |
@@ -141,6 +148,8 @@ both work (whisper 0.92 s/WER-good, Gemma audio 0.29 s/WER 0.20).
 | 2026-09-27 | Tool-calling mode: **raw `/completion` few-shot (90%) over jinja tools (83%)** | 30 spoken cases; jinja failed on "find the red cup"→describe, "come along with me"→empty; few-shot's misses are recoverable (say/describe for go_to phrasings). Port `parse_json_intent` as fallback parser either way | bench 1.9 |
 | 2026-09-27 | Vision: mmproj stays on **GPU** | CPU mmproj = 9.4 s/query, 3× over the 5 s budget | bench 1.7 + fallback test |
 | 2026-09-27 | G1 memory criteria fail in dev env; **re-run on clean headless boot before fallback escalation** | our stack grew +193 MB over 10 min vs 963 MB swap growth; opencode agent (this session) is resident and 1.5–2.9 GB swap pre-used | p112_gate_g1*.json decomposition |
+| 2026-09-28 | mmproj switched **F16 → Q8_0** (531 MB file) | F16's largest CUDA alloc (589 MB contiguous) exceeds the boot-time lfb on some boots (137×4MB); Q8_0 loads every time, vision quality unchanged ("What colour is the bus?" → correct, 1.22 s) | llama_server log, models/MODELS.md |
+| 2026-09-28 | Laya is **not a runtime dependency**; Phase 8 distillation experiment only | zero-shot 18–28% near chance (12.5%); CPU 10.5 s/1q unusable at 10 Hz; GPU 70 ms fine but accuracy is the blocker; RuleSelector draft 75%, Gemma 55% | p1b_selector_comparison.json, bench_laya.py |
 | | Image token budget | | bench 1.7 |
 
 ## Known issues

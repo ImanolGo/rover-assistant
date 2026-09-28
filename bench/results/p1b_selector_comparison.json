@@ -1,0 +1,13 @@
+{
+  "name": "p1b_selector_comparison",
+  "date": "2026-09-28T12:02:19",
+  "commit": "31aff08",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "laya_english_cuda_pct": 28,
+  "laya_multilingual_cuda_pct": 18,
+  "laya_english_cpu_pct": 28,
+  "gemma_e2b_zero_shot_pct": 55,
+  "naive_rule_draft_pct": 75,
+  "note": "RuleSelector is an offline draft; the real one is implemented in Phase 5 and re-scored then. Laya zero-shot is near-chance as the plan predicted."
+}

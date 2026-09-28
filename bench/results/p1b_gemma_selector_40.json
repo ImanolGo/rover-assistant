@@ -1,0 +1,103 @@
+{
+  "name": "p1b_gemma_selector_40",
+  "date": "2026-09-28T12:01:31",
+  "commit": "31aff08",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "accuracy_pct": 55,
+  "misses": [
+    {
+      "id": "s04",
+      "want": "REACQUIRE",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s09",
+      "want": "VERIFY",
+      "got": "APPROACH"
+    },
+    {
+      "id": "s10",
+      "want": "REACQUIRE",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s12",
+      "want": "ASK_PLANNER",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s13",
+      "want": "APPROACH",
+      "got": "VERIFY"
+    },
+    {
+      "id": "s15",
+      "want": "REACQUIRE",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s16",
+      "want": "ABORT",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s18",
+      "want": "ASK_PLANNER",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s21",
+      "want": "VERIFY",
+      "got": "APPROACH"
+    },
+    {
+      "id": "s28",
+      "want": "ABORT",
+      "got": "BACK_OFF"
+    },
+    {
+      "id": "s29",
+      "want": "DONE",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s30",
+      "want": "APPROACH",
+      "got": "VERIFY"
+    },
+    {
+      "id": "s31",
+      "want": "REACQUIRE",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s32",
+      "want": "SEARCH",
+      "got": "REACQUIRE"
+    },
+    {
+      "id": "s34",
+      "want": "APPROACH",
+      "got": "VERIFY"
+    },
+    {
+      "id": "s35",
+      "want": "ABORT",
+      "got": "APPROACH"
+    },
+    {
+      "id": "s37",
+      "want": "ASK_PLANNER",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s40",
+      "want": "ASK_PLANNER",
+      "got": "SEARCH"
+    }
+  ],
+  "n_misses": 18,
+  "wall_p50_s": 0.46,
+  "n": 40
+}

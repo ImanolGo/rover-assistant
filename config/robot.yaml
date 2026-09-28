@@ -90,7 +90,7 @@ planner:
 llama_server:                       # used by deploy/systemd/rover-llama.service
   binary: ~/llama.cpp/build/bin/llama-server
   model: models/gemma/gemma-4-E2B-it-Q4_K_M.gguf
-  mmproj: models/gemma/mmproj-gemma4-e2b-f16.gguf
+  mmproj: models/gemma/mmproj-gemma4-e2b-q8_0.gguf
   args: "-c 2048 -ngl 99 --flash-attn on --jinja -np 1 --image-min-tokens 70 --image-max-tokens 70 --host 127.0.0.1 --port 8080"
 
 api:

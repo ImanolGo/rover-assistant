@@ -92,20 +92,11 @@ def mem_snapshot() -> dict:
 
 def bench_config(checkpoint: str, device: str, nq_list=(1, 5, 10), calls: int = 50) -> dict:
     t0 = time.perf_counter()
-    from laya import Router
+    from laya.agent import Agent
 
     sub = None if checkpoint == "english" else checkpoint
-    router = Router(device=device, preload=False)
-    if sub:
-        router.agents = {"english": None}
-        del router.agents["english"]
-        from laya.agent import Agent
-
-        router.agents[checkpoint] = Agent("convaiinnovations/laya", device=device, subfolder=sub)
-        router.default = checkpoint
-    router.predict(
-        "warm up state. target visible yes bearing 5", {"skill": SKILL_QUESTION["skill"]}
-    )
+    agent = Agent("convaiinnovations/laya", device=device, subfolder=sub)
+    agent.predict("warm up state. target visible yes bearing 5", {"skill": SKILL_QUESTION["skill"]})
     load_s = time.perf_counter() - t0
     mem = mem_snapshot()
 
@@ -120,7 +111,7 @@ def bench_config(checkpoint: str, device: str, nq_list=(1, 5, 10), calls: int = 
                 f" search_steps={i % 12}/12"
             )
             t1 = time.perf_counter()
-            router.predict(state, qs)
+            agent.predict(state, qs)
             times.append(time.perf_counter() - t1)
         lat[nq] = {
             "p50_s": round(statistics.median(times), 4),
@@ -136,7 +127,7 @@ def bench_config(checkpoint: str, device: str, nq_list=(1, 5, 10), calls: int = 
     correct = 0
     misses = []
     for c in cases:
-        r = router.predict(c["state"], {"skill": SKILL_QUESTION["skill"]})
+        r = agent.predict(c["state"], {"skill": SKILL_QUESTION["skill"]})
         got = r["answers"]["skill"]["choice"]
         if got == c["label"]:
             correct += 1

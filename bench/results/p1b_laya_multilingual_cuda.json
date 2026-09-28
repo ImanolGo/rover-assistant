@@ -1,0 +1,70 @@
+{
+  "name": "p1b_laya_multilingual_cuda",
+  "date": "2026-09-28T10:42:17",
+  "commit": "31aff08",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "checkpoint": "multilingual",
+  "device": "cuda",
+  "load_s": 15.96,
+  "rss_mb": 3178,
+  "gpu_mb": 1256,
+  "latency": {
+    "1": {
+      "p50_s": 0.0686,
+      "p90_s": 0.0697
+    },
+    "5": {
+      "p50_s": 0.1037,
+      "p90_s": 0.1056
+    },
+    "10": {
+      "p50_s": 0.1569,
+      "p90_s": 0.1817
+    }
+  },
+  "accuracy_pct": 18,
+  "misses": [
+    {
+      "id": "s01",
+      "want": "SEARCH",
+      "got": "DONE"
+    },
+    {
+      "id": "s02",
+      "want": "APPROACH",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s03",
+      "want": "VERIFY",
+      "got": "APPROACH"
+    },
+    {
+      "id": "s04",
+      "want": "REACQUIRE",
+      "got": "DONE"
+    },
+    {
+      "id": "s05",
+      "want": "BACK_OFF",
+      "got": "DONE"
+    },
+    {
+      "id": "s06",
+      "want": "ASK_PLANNER",
+      "got": "SEARCH"
+    },
+    {
+      "id": "s07",
+      "want": "SEARCH",
+      "got": "DONE"
+    },
+    {
+      "id": "s08",
+      "want": "APPROACH",
+      "got": "SEARCH"
+    }
+  ],
+  "n_misses": 33
+}
