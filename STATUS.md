@@ -1,16 +1,16 @@
 # STATUS.md
 
-**Current phase:** 1 — Measure (1.0–1.9 + G1 done; 1.10–1.11 remaining; G1 clean-boot re-run required)
-**Last updated:** 2026-09-27 19:15 CEST (commit 0f8e1b4 + STATUS rewrite)
+**Current phase:** 2 — HAL port (Phase 1 exit recorded 2026-09-29; see GATE G1)
+**Last updated:** 2026-09-29 20:15 CEST (Phase 2 HAL + G1 clean re-run; commits 7b4d5fa + 8e20a30)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
 
 | Phase | State | Exit criteria met | Notes |
 |---|---|---|---|
-| 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs drop_caches + min_free_kbytes=1G. Image assets (robot photo, test frames) in assets/. |
-| 1 Measure | 🔄 | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (2 runs, perf ✅ mem ❌ dev-env) ☐ Laya ☐ 1.10 recordings ☐ clean-boot G1 | whisper.cpp built (CUDA); G1 memory verdict deferred to clean boot — see G1 section |
-| 2 HAL | ⏳ | ☐ camera ☐ geometry ☐ rover ☐ audio ☐ hw tests | |
+| 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs `drop_caches` (do **not** raise `min_free_kbytes` — see G1). Image assets (robot photo, test frames) in assets/. |
+| 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
+| 2 HAL | 🔄 | ☑ camera ☑ geometry ☑ rover ☑ audio ☐ hw tests on robot | fakes + 42 laptop tests green (commit 8e20a30); `hardware_tests/` written, need the operator at the robot |
 | 3 Perception | ⏳ | ☐ tracker ☐ bearing sign ☐ API/video ☐ §10 perf targets | |
 | 4 Voice | ⏳ | ☐ wake ☐ VAD ☐ STT ☐ TTS ☐ intents ≥90% | |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
@@ -64,45 +64,53 @@ MAXN SUPER, 2026-09-27, commit 359c2d2).
 | Gemma E2B tools | 30 spoken-style cases | — | — | — | — | **jinja tools: 83% tool acc, 93% arg acc** · **/completion few-shot: 90% tool acc, 93% arg acc** · 0 thinking leaks either way · p50 ~0.8 s |
 | Moondream (baseline) | llama.cpp | — | — | — | — | legacy files kept in models/moondream/ for on-demand comparison |
 
-### GATE G1 — coexistence (two full 10-min runs, MAXN SUPER, 2026-09-27, commit 3cacba2)
+### GATE G1 — coexistence (clean re-run, MAXN SUPER, 2026-09-29, commits 7b4d5fa/8e20a30)
 
 Stack resident: camera 820×616@30 (nvvidconv downscale, drop=true), YOLO11n TRT
-FP16 + ByteTrack continuous, llama-server E2B Q4_K_M + mmproj `-ngl 99 -c 2048
---image-max-tokens 70 --jinja`, whisper-server base.en CUDA (run 1 only), Piper
-resident, every 15 s one unique-frame vision query + one planner tool call.
+FP16 + ByteTrack continuous, llama-server E2B Q4_K_M + mmproj q8_0 (`-ngl 99 -c
+2048 --cache-ram 0 --image-max-tokens 70 --jinja`), Piper resident; every 15 s
+one unique-frame vision query + one planner tool call. opencode and every other
+dev process had been moved off the Jetson; jtop/ollama stopped; `vm.min_free_kbytes`
+left at the kernel default (45056). Two clean-boot runs, differing only in
+whisper.cpp residency:
 
-| Criterion | Target | Run 1 (with whisper) | Run 2 (no whisper) | Pass |
+| Criterion | Target | Run A (whisper) | Run B (no whisper) | Pass |
 |---|---|---|---|---|
 | OOM / CUDA alloc failures | 0 | 0 | 0 | ✅ |
-| Min MemAvailable | ≥ 800 MB | **0 MB** | **0 MB** | ❌ |
-| Swap growth after load | < 100 MB | **963 MB** | **991 MB** | ❌ |
-| YOLO e2e FPS during Gemma generation | ≥ 15 | 59.8 | 69.4 | ✅ |
-| Gemma vision p90 under load | ≤ 5 s | 1.37 s | 1.17 s | ✅ |
-| Vision queries ok / total | 40 | 35/35 | 35/35 | ✅ |
-| Fallback applied | none | — | #3 (whisper dropped; no memory change) | |
+| Min MemAvailable | ≥ 800 MB | **571 MB** | **574 MB** | ❌ deviation |
+| Swap growth after load | < 100 MB | 86.8 MB | **−0.2 MB** | ✅ |
+| YOLO e2e FPS during generation | ≥ 15 | 68.6 | 54.5 | ✅ |
+| Gemma vision p90 under load | ≤ 5 s | 1.07 s | 1.32 s | ✅ |
+| Vision queries ok / total | — | 36/36 | 35/35 | ✅ |
 
-**Verdict: FAIL on the two memory criteria — but with strong evidence the
-failure is environmental, not architectural:**
+**Verdict: performance and functional criteria PASS; the 800 MB MemAvailable
+criterion is a documented, operator-accepted deviation.** What the re-run
+established:
 
-1. Per-PID RSS decomposition over the 10-min run: our stack grew only
-   **+193 MB** (bench python +210, llama-server +124, nvargus-daemon +197,
-   opencode **−338**). The remaining ~800 MB of swap growth is unattributable
-   to the robot stack.
-2. The dev session runs the opencode agent itself (450–930 MB RSS) and 1.5–2.9 GB
-   of swap was already in use before each run after a day of uptime. The
-   production target is headless systemd with neither.
-3. Despite MemAvailable ~0 the whole time, **zero vision failures and zero
-   errors occurred across both 10-minute runs**, with vision p90 1.2–1.4 s and
-   YOLO at 60–70 FPS during generation — the system degrades gracefully.
-4. Fallbacks #1 (mmproj CPU: 9.4 s/query, 3× over budget) and #3 (drop whisper:
-   no memory improvement) were measured and rejected/recorded. #2
-   (`-c 2048`, 70 img tokens) was already active.
+1. **`vm.min_free_kbytes=1 G` was harmful and is removed.** The first "clean"
+   run set it before llama-server; it deflated MemAvailable by ~2 GB (61 MB with
+   vs 2078 MB without, llama-server alone) and forced ~1 GB of swap. The real
+   NvMap fix is `drop_caches` (+ compaction) alone.
+2. **llama-server leaked ~45 MB/min under unique vision queries.** Its default
+   prompt cache is 8 GB (`--cache-ram 8192`); unique images were retained. With
+   `--cache-ram 0` the server warms ~+382 MB then plateaus (RSS 4890→4892 MB
+   over 20 queries). Now set in `config/robot.yaml`.
+3. **The bench leaked nvargus clients** (pipeline left PLAYING), which broke the
+   next camera session ("Failed to create CaptureSession"). Fixed in
+   `bench_coexist.py` (pipeline → NULL on exit, commit 7b4d5fa).
+4. **The 800 MB bar is below the Q4_K_M design's floor.** ARCHITECTURE §6
+   budgets ~5.9 GB stack + ~1.0 GB OS on a 7.4 GB board ≈ 0.5 GB free; measured
+   steady state is 574–623 MB. Fallback #3 (drop whisper) moved avail 235→574 MB
+   and swap to 0; KV-cache q8 gave no gain.
+5. **Fallback #4 (Q3_K_M) was tried and rejected for quality.** It frees ~520 MB
+   but degrades vision: on `bus.jpg` Q4 answers "blue" (5/5) while Q3 answers
+   "white and green" (foliage), so "go to the blue bus" would fail. Vision
+   quality outweighs the last ~200 MB (operator decision, 2026-09-29).
 
-**Action:** re-run G1 on a clean headless boot (Phase 6 soak runs the same
-stack under MemProbe for 60 min). If the memory criteria still fail there,
-the next fallback is #6 (LAN GPU) — but per the decomposition, expected result
-is PASS. Decision on STT (whisper vs Gemma audio) is deferred to that re-run:
-both work (whisper 0.92 s/WER-good, Gemma audio 0.29 s/WER 0.20).
+Raw: `bench/results/raw/g1_run6_cleanboot_nowhisper_cacheram0.json` (Run B, the
+accepted config) and `.../g1_run5c_minfree_default_whisper_cacheram0.json` (Run A).
+Earlier runs on the same investigation: `g1_run1_clean_minfree1g.json` (sysctl
+artifact), `g1_run2c`/`g1_run3` (pre-cache-ram), `g1_run4` (cache leak).
 
 ### Laya (Phase 1b, 2026-09-28, commit 31aff08)
 | Checkpoint | Device/dtype | Load s | Mem | 1q p50 | 5q p50 | 10q p50 | Acc (40 cases) | Under G1 load |
@@ -143,19 +151,24 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-09-27 | Camera pipeline: no `videoconvert`; BGRx → numpy alpha-drop | `videoconvert` costs ~13% core at 820×616; BGRx straight to appsink is 22.7% vs 50.2% legacy full-res | bench/profile_legacy_camera.py, bench/bench_camera.py |
 | 2026-09-27 | llama.cpp pin: v0.5.0 (`d2e54583`) | current release at port start; Gemma 4 supported | models/MODELS.md |
 | 2026-09-27 | Gemma E2B is a *thinking* model: `/v1/chat/completions` fills `reasoning_content`, not `content` | observed live: answer empty, thinking in `reasoning_content`; planner/verify parsers must read both (and/or disable reasoning) | llama-server smoke test, chat1 response |
-| 2026-09-27 | Jetson first CUDA load needs `drop_caches` + `min_free_kbytes=1G` | NvMap contiguous-alloc ENOMEM at lfb≈50×4MB even with 5 GB available; after drop_caches lfb=147×4MB, load OK in 20 s | /tmp/llama_server logs, Phase 0 |
-| 2026-09-27 | STT: **defer to clean-boot G1 re-run**. whisper base.en 0.92 s (708 MB) vs Gemma audio 0.29 s (0 MB extra, WER 0.20 on 3 clips) | both work; memory headroom decides | bench 1.3 vs 1.8 |
+| 2026-09-27 | Jetson first CUDA load needs `drop_caches` + `min_free_kbytes=1G` — **superseded 2026-09-29: `min_free_kbytes` is harmful; use `drop_caches` alone** | NvMap contiguous-alloc ENOMEM at lfb≈50×4MB even with 5 GB available; after drop_caches lfb=147×4MB, load OK in 20 s | /tmp/llama_server logs, Phase 0; see 09-29 rows |
+| 2026-09-27 | STT: **defer to clean-boot G1 re-run** (resolved 2026-09-29 → Gemma audio). whisper base.en 0.92 s (708 MB) vs Gemma audio 0.29 s (0 MB extra, WER 0.20 on 3 clips) | both work; memory headroom decides | bench 1.3 vs 1.8 |
 | 2026-09-27 | Tool-calling mode: **raw `/completion` few-shot (90%) over jinja tools (83%)** | 30 spoken cases; jinja failed on "find the red cup"→describe, "come along with me"→empty; few-shot's misses are recoverable (say/describe for go_to phrasings). Port `parse_json_intent` as fallback parser either way | bench 1.9 |
 | 2026-09-27 | Vision: mmproj stays on **GPU** | CPU mmproj = 9.4 s/query, 3× over the 5 s budget | bench 1.7 + fallback test |
 | 2026-09-27 | G1 memory criteria fail in dev env; **re-run on clean headless boot before fallback escalation** | our stack grew +193 MB over 10 min vs 963 MB swap growth; opencode agent (this session) is resident and 1.5–2.9 GB swap pre-used | p112_gate_g1*.json decomposition |
 | 2026-09-28 | mmproj switched **F16 → Q8_0** (531 MB file) | F16's largest CUDA alloc (589 MB contiguous) exceeds the boot-time lfb on some boots (137×4MB); Q8_0 loads every time, vision quality unchanged ("What colour is the bus?" → correct, 1.22 s) | llama_server log, models/MODELS.md |
 | 2026-09-28 | Laya is **not a runtime dependency**; Phase 8 distillation experiment only | zero-shot 18–28% near chance (12.5%); CPU 10.5 s/1q unusable at 10 Hz; GPU 70 ms fine but accuracy is the blocker; RuleSelector draft 75%, Gemma 55% | p1b_selector_comparison.json, bench_laya.py |
-| | Image token budget | | bench 1.7 |
+| 2026-09-29 | **STT = Gemma audio**; whisper.cpp dropped from the runtime | whisper costs ~0.4–0.7 GB and a third CUDA process; Gemma audio is 0.29 s vs 0.92 s and memory is the binding constraint | bench 1.3 vs 1.8; G1 runs A/B |
+| 2026-09-29 | llama-server runs with `--cache-ram 0` | default 8 GB prompt cache leaked ~45 MB per unique vision query (RSS 4.9→5.06 GB / 10 min); with 0 it warms +382 MB then plateaus | RSS probe, 20 unique queries; G1 run4 vs run6 |
+| 2026-09-29 | Do **not** raise `vm.min_free_kbytes`; use `drop_caches` + compaction only | 1 GB min_free deflated MemAvailable ~2 GB (61 MB vs 2078 MB, llama only) and forced ~1 GB swap; `drop_caches` alone loads mmproj and the camera | sysctl A/B; G1 run1 vs run2c |
+| 2026-09-29 | G1 memory near-miss **accepted** (MemAvailable ~574 MB < 800 MB); perf + no-OOM + swap pass | ARCHITECTURE §6 budget itself implies ~0.5 GB free on 8 GB; fallback #4 (Q3_K_M) would pass but breaks vision (blue bus → "white and green") | G1 run6; Q3 bus probe |
+| 2026-09-29 | Bench must tear down its GStreamer pipeline on exit | leaked nvargus clients broke the following camera session | commit 7b4d5fa |
+| 2026-09-27 | Image token budget: **70 (min=max)** | smallest budget that kept 5/5 vision answers; 140/280 cost prompt time with no accuracy gain | bench 1.7 |
 
 ## Known issues
-1. CUDA NvMap contiguous-alloc ENOMEM after long uptime / fragmentation. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; sysctl vm.min_free_kbytes=1048576`. Must go into `scripts/doctor.sh` (Phase 7).
+1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).
 2. OpenCV (pip) has no GStreamer on this Jetson — camera HAL uses `gi`/Gst appsink (as legacy did). Confirmed working.
 3. `uv sync` must keep `tool.uv.sources` for torch/torchvision or PyPI silently installs a cu130 build the JP6 driver rejects (`torch.cuda.is_available()` = False with no obvious error).
 4. Gemma E2B emits thinking in `reasoning_content`; with `"chat_template_kwargs": {"enable_thinking": false}` content is filled correctly. Bench harness uses this; the planner must too.
-5. A background process started from the agent shell dies with the shell's process group — long-running benches must be launched via `setsid`. (Ops note, not a code issue.)
-6. G1 memory criteria failed under the dev environment (agent resident). Re-run required on clean headless boot before Phase 2 proceeds past gate-affected design points._
+5. Ops: long-running benches must run in tmux (a bare background process dies with the shell's process group). The gate script also held nvargus clients when it exited without tearing the pipeline down — fixed in `bench_coexist.py` (7b4d5fa).
+6. G1 clean re-run (2026-09-29): performance/functional criteria pass, swap stable, no OOM; `MemAvailable` ~574 MB is below the 800 MB bar and is an accepted deviation (Q4_K_M cannot leave >800 MB on 8 GB; Q3_K_M would but degrades vision). The 60-min soak (Phase 6) re-tests this under MemProbe._

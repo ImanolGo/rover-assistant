@@ -18,3 +18,8 @@ Filled by scripts/download_models.sh: filename, source URL, SHA256, and the pinn
 | moondream/moondream2-mmproj.gguf | 4cc1cb3660d87ff56432ebeb7884ad35d67c48c7b9f6b2856f305e39c38eed8f |
 
 llama.cpp build commit: d2e54583c7452353eb35d40431281f6ee984332f
+
+## Evaluated 2026-09-29 (G1 fallback #4 — rejected)
+| File | SHA256 | Note |
+|---|---|---|
+| gemma/gemma-4-E2B-it-Q3_K_M.gguf | 086e2f5ba85057f8f19712e3160a644728f74f323c9feeac4cd73fab11b43085 | frees ~520 MB but degrades vision (blue bus → "white and green"); Q4_K_M retained |

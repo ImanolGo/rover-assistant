@@ -119,17 +119,26 @@ class Selector(Protocol):
 - Gemma frames are undistorted with cached remap maps, one frame per query.
 - Known limit: a 5-coefficient model on a 160° lens is poor near the edges. Only trust distance (box height) once the target is centred. A `cv2.fisheye` recalibration is a later improvement.
 
-## 6. Models and memory budget *(est.; replaced by G1 measurements)*
+## 6. Models and memory budget (measured 2026-09-29; G1 run B, commit 8e20a30)
 
-| Component | Where | Est. memory |
-|---|---|---|
-| OS headless, no desktop, no docker | — | ~1.0 GB |
-| Gemma 4 E2B Q4_K_M (`-c 2048`) | llama-server, GPU | ~3.0 GB |
-| mmproj (vision + audio) | llama-server, GPU or CPU | ~1.0 GB |
-| YOLO11n TensorRT FP16 + buffers + ByteTrack | brain, GPU | ~0.3 GB |
-| whisper.cpp base.en *(dropped if Gemma audio wins)* | brain subprocess, GPU | ~0.2 GB |
-| Piper + openWakeWord + Silero + app + camera buffers | brain, CPU | ~0.4 GB |
-| **Total** | | **~5.9 GB** (legacy: 5.6 GB *without* any VLM) |
+| Component | Where | Est. | Measured |
+|---|---|---|---|
+| OS headless, no desktop, no docker, no jtop/ollama | — | ~1.0 GB | ~0.6 GB |
+| Gemma 4 E2B Q4_K_M (`-c 2048 --cache-ram 0`) | llama-server, GPU | ~3.0 GB | **4.9 GB** RSS (weights + mmproj + KV + CUDA arena) |
+| mmproj (vision + audio, q8_0) | llama-server, GPU | ~1.0 GB | included above (~0.53 GB file) |
+| YOLO11n TRT FP16 + ByteTrack + torch/ultralytics + camera | brain, GPU | ~0.3 GB | **~1.3 GB** RSS (torch/ultralytics dominate) |
+| whisper.cpp base.en | — | ~0.2 GB | **dropped** — STT moved to Gemma audio |
+| Piper + openWakeWord + Silero + app + camera buffers | brain, CPU | ~0.4 GB | Piper ~0.15 GB |
+| nvargus-daemon | — | — | ~0.31 GB |
+| **Total / MemAvailable** | | ~5.9 GB | **~7.3 GB used → MemAvailable ~0.57 GB** |
+
+> **Measured deviation:** the 800 MB `MemAvailable` gate criterion is **not met**
+> on 8 GB with Q4_K_M (steady 574–623 MB). The stack is nonetheless stable:
+> 0 OOM, swap ~0, 35/35 vision, YOLO 54 fps during generation (see STATUS.md
+> GATE G1). Q3_K_M would clear the bar but degrades vision (blue bus → "white
+> and green"), so Q4_K_M is retained (operator decision 2026-09-29). The biggest
+> lever for more headroom is the brain's torch/ultralytics footprint (~1.3 GB; a
+> direct TensorRT runtime would remove much of it).
 
 ## 7. Repository layout
 

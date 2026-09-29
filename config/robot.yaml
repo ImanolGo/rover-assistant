@@ -73,7 +73,7 @@ voice:
   vad_threshold: 0.5                  # (legacy)
   end_silence_ms: 800
   max_utterance_s: 10
-  stt_backend: whispercpp             # whispercpp | gemma  (decided in Phase 1)
+  stt_backend: gemma                  # whispercpp | gemma  (decided in Phase 1: Gemma audio wins)
   whisper_model: models/whisper/ggml-base.en.bin
   tts_voice: models/piper/en_US-lessac-medium.onnx     # (legacy voice)
   wake_sound: assets/audio/notify_asc.wav
@@ -91,7 +91,7 @@ llama_server:                       # used by deploy/systemd/rover-llama.service
   binary: ~/llama.cpp/build/bin/llama-server
   model: models/gemma/gemma-4-E2B-it-Q4_K_M.gguf
   mmproj: models/gemma/mmproj-gemma4-e2b-q8_0.gguf
-  args: "-c 2048 -ngl 99 --flash-attn on --jinja -np 1 --image-min-tokens 70 --image-max-tokens 70 --host 127.0.0.1 --port 8080"
+  args: "-c 2048 -ngl 99 --flash-attn on --jinja -np 1 --cache-ram 0 --image-min-tokens 70 --image-max-tokens 70 --host 127.0.0.1 --port 8080"
 
 api:
   host: 0.0.0.0
