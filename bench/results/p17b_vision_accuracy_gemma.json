@@ -1,0 +1,140 @@
+{
+  "name": "p17b_vision_accuracy_gemma",
+  "date": "2026-09-29T21:09:57",
+  "commit": "48f9fd7",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "protocol": "gemma",
+  "n": 15,
+  "correct": 14,
+  "accuracy_pct": 93,
+  "by_category": {
+    "colour": "8/8",
+    "count": "2/3",
+    "position": "1/1",
+    "presence": "3/3"
+  },
+  "wall_p50_s": 0.62,
+  "rows": [
+    {
+      "name": "colour_red_circle",
+      "category": "colour",
+      "question": "What colour is the circle?",
+      "answer": "The circle is **red**.",
+      "correct": true,
+      "wall_s": 1.38
+    },
+    {
+      "name": "colour_blue_square",
+      "category": "colour",
+      "question": "What colour is the square?",
+      "answer": "The square is **blue**.",
+      "correct": true,
+      "wall_s": 0.71
+    },
+    {
+      "name": "colour_green_triangle",
+      "category": "colour",
+      "question": "What colour is the triangle?",
+      "answer": "The triangle is **green**.",
+      "correct": true,
+      "wall_s": 0.63
+    },
+    {
+      "name": "colour_yellow_circle",
+      "category": "colour",
+      "question": "What colour is the circle?",
+      "answer": "The circle is **yellow**.",
+      "correct": true,
+      "wall_s": 0.63
+    },
+    {
+      "name": "count_two_circles",
+      "category": "count",
+      "question": "How many circles are in the image?",
+      "answer": "There are **2** circles in the image.",
+      "correct": true,
+      "wall_s": 0.8
+    },
+    {
+      "name": "count_three_squares",
+      "category": "count",
+      "question": "How many squares are in the image?",
+      "answer": "Based on the image provided, there are **4** squares.\n\nThey are arranged in a 2x",
+      "correct": false,
+      "wall_s": 1.36
+    },
+    {
+      "name": "count_one_shape",
+      "category": "count",
+      "question": "How many shapes are in the image?",
+      "answer": "Based on the image provided, there is **one** main shape, which is a **green cir",
+      "correct": true,
+      "wall_s": 1.19
+    },
+    {
+      "name": "attr_square_colour",
+      "category": "colour",
+      "question": "What colour is the square?",
+      "answer": "The square is **blue**.",
+      "correct": true,
+      "wall_s": 0.62
+    },
+    {
+      "name": "attr_circle_colour",
+      "category": "colour",
+      "question": "What colour is the circle?",
+      "answer": "The circle is **red**.",
+      "correct": true,
+      "wall_s": 0.62
+    },
+    {
+      "name": "presence_no_blue",
+      "category": "presence",
+      "question": "Is there a blue square in the image? Answer yes or no.",
+      "answer": "no",
+      "correct": true,
+      "wall_s": 0.45
+    },
+    {
+      "name": "presence_yes_blue",
+      "category": "presence",
+      "question": "Is there a blue square in the image? Answer yes or no.",
+      "answer": "Yes",
+      "correct": true,
+      "wall_s": 0.44
+    },
+    {
+      "name": "position_red_left",
+      "category": "position",
+      "question": "Is the red circle on the left side? Answer yes or no.",
+      "answer": "Yes",
+      "correct": true,
+      "wall_s": 0.45
+    },
+    {
+      "name": "bus_colour",
+      "category": "colour",
+      "question": "What colour is the bus? Answer with one colour word.",
+      "answer": "Blue",
+      "correct": true,
+      "wall_s": 0.46
+    },
+    {
+      "name": "bus_presence",
+      "category": "presence",
+      "question": "Is there a bus in this image? Answer yes or no.",
+      "answer": "Yes",
+      "correct": true,
+      "wall_s": 0.48
+    },
+    {
+      "name": "plain_colour",
+      "category": "colour",
+      "question": "What colour is this image? Answer with one colour word.",
+      "answer": "Blue",
+      "correct": true,
+      "wall_s": 0.44
+    }
+  ]
+}

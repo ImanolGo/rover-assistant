@@ -1,0 +1,140 @@
+{
+  "name": "p17b_vision_accuracy_moondream_llamacpp",
+  "date": "2026-09-29T21:17:11",
+  "commit": "48f9fd7",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "protocol": "gemma",
+  "n": 15,
+  "correct": 4,
+  "accuracy_pct": 27,
+  "by_category": {
+    "colour": "3/8",
+    "count": "1/3",
+    "position": "0/1",
+    "presence": "0/3"
+  },
+  "wall_p50_s": 0.5,
+  "rows": [
+    {
+      "name": "colour_red_circle",
+      "category": "colour",
+      "question": "What colour is the circle?",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.5
+    },
+    {
+      "name": "colour_blue_square",
+      "category": "colour",
+      "question": "What colour is the square?",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.43
+    },
+    {
+      "name": "colour_green_triangle",
+      "category": "colour",
+      "question": "What colour is the triangle?",
+      "answer": "Green",
+      "correct": true,
+      "wall_s": 1.0
+    },
+    {
+      "name": "colour_yellow_circle",
+      "category": "colour",
+      "question": "What colour is the circle?",
+      "answer": "Yellow",
+      "correct": true,
+      "wall_s": 0.96
+    },
+    {
+      "name": "count_two_circles",
+      "category": "count",
+      "question": "How many circles are in the image?",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.37
+    },
+    {
+      "name": "count_three_squares",
+      "category": "count",
+      "question": "How many squares are in the image?",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.38
+    },
+    {
+      "name": "count_one_shape",
+      "category": "count",
+      "question": "How many shapes are in the image?",
+      "answer": "1",
+      "correct": true,
+      "wall_s": 0.96
+    },
+    {
+      "name": "attr_square_colour",
+      "category": "colour",
+      "question": "What colour is the square?",
+      "answer": "Blue",
+      "correct": true,
+      "wall_s": 0.96
+    },
+    {
+      "name": "attr_circle_colour",
+      "category": "colour",
+      "question": "What colour is the circle?",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.38
+    },
+    {
+      "name": "presence_no_blue",
+      "category": "presence",
+      "question": "Is there a blue square in the image? Answer yes or no.",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.38
+    },
+    {
+      "name": "presence_yes_blue",
+      "category": "presence",
+      "question": "Is there a blue square in the image? Answer yes or no.",
+      "answer": "I am sorry, but I cannot generate a response that includes an image. Please prov",
+      "correct": false,
+      "wall_s": 1.54
+    },
+    {
+      "name": "position_red_left",
+      "category": "position",
+      "question": "Is the red circle on the left side? Answer yes or no.",
+      "answer": "No",
+      "correct": false,
+      "wall_s": 0.97
+    },
+    {
+      "name": "bus_colour",
+      "category": "colour",
+      "question": "What colour is the bus? Answer with one colour word.",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.38
+    },
+    {
+      "name": "bus_presence",
+      "category": "presence",
+      "question": "Is there a bus in this image? Answer yes or no.",
+      "answer": "HTTP 500 {\"error\":{\"code\":500,\"message\":\"failed to process mtmd chunk\",\"type\":\"s",
+      "correct": false,
+      "wall_s": 0.38
+    },
+    {
+      "name": "plain_colour",
+      "category": "colour",
+      "question": "What colour is this image? Answer with one colour word.",
+      "answer": "I am sorry, but I cannot provide an answer to this question as it goes against O",
+      "correct": false,
+      "wall_s": 2.06
+    }
+  ]
+}
