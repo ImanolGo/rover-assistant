@@ -47,6 +47,7 @@ class YoloLoop:
         from gi.repository import Gst
 
         Gst.init(None)
+        self._gst = Gst
         self.frame = None
         self.t_capture = 0.0
         self.lock = threading.Lock()
@@ -77,6 +78,7 @@ class YoloLoop:
 
         sink.connect("new-sample", on_sample)
         pipe.set_state(Gst.State.PLAYING)
+        self.pipeline = pipe
 
         from ultralytics import YOLO
 
@@ -107,6 +109,12 @@ class YoloLoop:
             now = time.perf_counter()
             self.fps_samples.append(1.0 / max(now - t_last, 1e-6))
             t_last = now
+
+    def close(self) -> None:
+        """Stop the YOLO thread and release the GStreamer pipeline (Argus clients)."""
+        self.running = False
+        self.thread.join(timeout=2.0)
+        self.pipeline.set_state(self._gst.State.NULL)
 
     def fps_during(self, seconds: float) -> float:
         with self.lock:
@@ -267,7 +275,7 @@ if __name__ == "__main__":
     if whisper_proc:
         whisper_proc.kill()
     piper_proc.kill()
-    yolo.running = False
+    yolo.close()
     mem = probe.stop()
 
     fps_all = yolo.fps_samples
