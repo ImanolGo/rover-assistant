@@ -1,7 +1,7 @@
 # STATUS.md
 
 **Current phase:** 2 — HAL port (Phase 1 exit recorded 2026-09-29; see GATE G1)
-**Last updated:** 2026-09-29 20:15 CEST (Phase 2 HAL + G1 clean re-run; commits 7b4d5fa + 8e20a30)
+**Last updated:** 2026-09-29 20:25 CEST (Phase 2 HAL + G1 clean re-run; HEAD e6d9fe2)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs `drop_caches` (do **not** raise `min_free_kbytes` — see G1). Image assets (robot photo, test frames) in assets/. |
 | 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
-| 2 HAL | 🔄 | ☑ camera ☑ geometry ☑ rover ☑ audio ☐ hw tests on robot | fakes + 42 laptop tests green (commit 8e20a30); `hardware_tests/` written, need the operator at the robot |
+| 2 HAL | 🔄 | ☑ camera ☑ geometry ☑ rover ☑ audio ~ hw: camera ✅ (30.0 fps, 820×616); audio/rover need the operator | fakes + 42 laptop tests green (8e20a30); `hardware_tests/` written; camera test run on the Jetson |
 | 3 Perception | ⏳ | ☐ tracker ☐ bearing sign ☐ API/video ☐ §10 perf targets | |
 | 4 Voice | ⏳ | ☐ wake ☐ VAD ☐ STT ☐ TTS ☐ intents ≥90% | |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
