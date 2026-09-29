@@ -14,5 +14,5 @@ jobs:
       - run: pip install ruff black pytest
       - run: ruff check src bench
       - run: black --check src bench
-      - run: pip install -e . --no-deps && pip install numpy pyyaml pyserial fastapi uvicorn httpx
+      - run: pip install -e . --no-deps && pip install numpy pyyaml pyserial fastapi uvicorn httpx opencv-python-headless
       - run: pytest -q
