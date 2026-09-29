@@ -14,6 +14,7 @@ from rover.hal.audio import (
     find_device,
     normalize_int16,
     parse_alsa_devices,
+    parse_pulse_sinks,
     to_speaker_format,
 )
 
@@ -39,6 +40,16 @@ def test_parse_and_find_mic():
 def test_find_speaker_by_name():
     assert find_device(APLAY, "UACDemoV1.0") == "plughw:0,0"
     assert find_device(APLAY, "nonexistent") is None
+
+
+def test_parse_pulse_sinks():
+    listing = (
+        "0\talsa_output.usb-Jieli_Technology_UACDemoV1.0_4150-00.analog-stereo\tmodule\tx\tIDLE\n"
+        "1\talsa_output.platform-sound.analog-stereo\tmodule\ty\tIDLE\n"
+    )
+    sinks = parse_pulse_sinks(listing)
+    assert sinks[0]["name"].endswith("analog-stereo")
+    assert "UACDemoV1.0" in sinks[0]["name"]
 
 
 def test_normalize_boosts_quiet_but_caps_gain():

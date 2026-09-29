@@ -2,16 +2,20 @@
 
 Ports the legacy ROS2 audio nodes without ROS. The mic is a USB device
 (``USB PnP Sound Device``) captured at 16 kHz mono through ``arecord`` in
-80 ms frames; the speaker (``UACDemoV1.0``) wants 48 kHz stereo float32 via
-``sounddevice``. Device numbers move across boots, so both ends are selected by
-name substring. Laptop/sim uses :class:`WavSource` and :class:`NullSpeaker`.
+80 ms frames; the speaker (``UACDemoV1.0``) is fed 48 kHz stereo S16 through
+``aplay`` (PortAudio cannot open the card while pipewire holds it). Device
+numbers move across boots, so both ends are selected by name substring.
+Laptop/sim uses :class:`WavSource` and :class:`NullSpeaker`.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -67,12 +71,12 @@ def find_device(text: str, name: str) -> str | None:
     return None
 
 
-def list_alsa_devices(flag: str) -> str:
-    """Run ``arecord -l`` (flag ``-l``) or a specific listing command."""
-    if shutil.which("arecord") is None:
+def list_alsa_devices(flag: str = "-l", command: str = "arecord") -> str:
+    """Run ``arecord -l`` / ``aplay -l`` and return the listing text."""
+    if shutil.which(command) is None:
         return ""
     try:
-        return subprocess.run(["arecord", flag], capture_output=True, text=True, check=False).stdout
+        return subprocess.run([command, flag], capture_output=True, text=True, check=False).stdout
     except OSError:
         return ""
 
@@ -176,16 +180,21 @@ class WavSource:
 
 
 class AlsaCapture:
-    """Real capture via an ``arecord`` subprocess at 16 kHz mono S16_LE."""
+    """Real capture via ``arecord`` (pulse source when a sound server owns the card)."""
 
     def __init__(self, config: AudioConfig, device: str | None = None):
         self.config = config
-        self.device = device or find_device(list_alsa_devices("-l"), config.mic_name) or "default"
+        self.source = None if device else find_pulse_source(config.mic_name)
+        self.device = device or (find_device(list_alsa_devices("-l"), config.mic_name) or "default")
+        target, env = self.device, None
+        if self.source:
+            target = "pulse"
+            env = {**os.environ, "PULSE_SOURCE": self.source}
         self._proc = subprocess.Popen(
             [
                 "arecord",
                 "-D",
-                self.device,
+                target,
                 "-r",
                 str(config.mic_rate),
                 "-c",
@@ -198,6 +207,7 @@ class AlsaCapture:
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
 
     def read_frame(self) -> np.ndarray | None:
@@ -230,39 +240,119 @@ class NullSpeaker:
     def close(self) -> None: ...
 
 
+def parse_pulse_sinks(text: str) -> list[dict[str, str]]:
+    """Parse ``pactl list sinks short`` (tab-separated: index, name, driver, ...)."""
+    sinks: list[dict[str, str]] = []
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            sinks.append({"index": parts[0].strip(), "name": parts[1].strip()})
+    return sinks
+
+
+def _normalise(text: str) -> str:
+    """Lower-case alphanumerics only, so 'USB PnP Sound Device' matches underscores."""
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _pactl_names(kind: str) -> list[str]:
+    if shutil.which("pactl") is None:
+        return []
+    try:
+        listing = subprocess.run(
+            ["pactl", "list", kind, "short"], capture_output=True, text=True, check=False
+        ).stdout
+    except OSError:
+        return []
+    return [entry["name"] for entry in parse_pulse_sinks(listing)]
+
+
+def find_pulse_sink(name: str) -> str | None:
+    """Return the PulseAudio/PipeWire sink matching ``name`` (normalised)."""
+    needle = _normalise(name)
+    return next((n for n in _pactl_names("sinks") if needle in _normalise(n)), None)
+
+
+def find_pulse_source(name: str) -> str | None:
+    """Return the PulseAudio/PipeWire source matching ``name`` (normalised)."""
+    needle = _normalise(name)
+    return next((n for n in _pactl_names("sources") if needle in _normalise(n)), None)
+
+
 class AlsaSpeaker:
-    """Real playback via ``sounddevice`` at the speaker's native format."""
+    """Real playback through ``aplay``.
 
-    def __init__(self, config: AudioConfig, device_index: int | None = None):
-        import sounddevice as sd
+    Here pipewire/pulseaudio owns the UACDemo card, so direct ``plughw:0,0`` is
+    busy and PortAudio cannot open it. We resolve the matching PulseAudio sink by
+    name and stream raw 48 kHz stereo S16 to ``aplay -D pulse`` with
+    ``PULSE_SINK`` set; with no sound server (headless) we fall back to the ALSA
+    ``plughw`` device. ``aplay`` restarts once if the open races.
+    """
 
+    def __init__(self, config: AudioConfig, device: str | None = None):
         self.config = config
-        if device_index is None:
-            device_index = self._find_device(config.speaker_name, config)
-        self._stream = sd.OutputStream(
-            samplerate=config.speaker_rate,
-            channels=config.speaker_channels,
-            dtype=np.float32,
-            latency="low",
-            device=(None, device_index),
+        self.sink = None if device else find_pulse_sink(config.speaker_name)
+        self.device = device or (
+            find_device(list_alsa_devices("-l", "aplay"), config.speaker_name) or "default"
         )
-        self._stream.start()
+        self._lock = threading.Lock()
+        self._proc: subprocess.Popen | None = None
+        self._spawn()
 
-    @staticmethod
-    def _find_device(name: str, config: AudioConfig) -> int:
-        import sounddevice as sd
-
-        for index, device in enumerate(sd.query_devices()):
-            if name in device["name"] and device["max_output_channels"] >= config.speaker_channels:
-                return index
-        raise RuntimeError(f"no output device matching {name!r} with stereo support")
+    def _spawn(self) -> None:
+        target, env = self.device, None
+        if self.sink:
+            target = "pulse"
+            env = {**os.environ, "PULSE_SINK": self.sink}
+        self._proc = subprocess.Popen(
+            [
+                "aplay",
+                "-q",
+                "-D",
+                target,
+                "-r",
+                str(self.config.speaker_rate),
+                "-c",
+                str(self.config.speaker_channels),
+                "-f",
+                "S16_LE",
+                "-t",
+                "raw",
+                "-",
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+        )
 
     def play(self, samples: np.ndarray, rate: int) -> None:
-        self._stream.write(to_speaker_format(samples, rate, self.config))
+        fmt = to_speaker_format(samples, rate, self.config)
+        pcm = (np.clip(fmt, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
+        with self._lock:
+            for attempt in range(2):
+                if self._proc is None or self._proc.poll() is not None:
+                    self._spawn()
+                try:
+                    self._proc.stdin.write(pcm)
+                    self._proc.stdin.flush()
+                    return
+                except (BrokenPipeError, OSError):
+                    if attempt == 1:
+                        raise
+                    time.sleep(0.2)
 
     def close(self) -> None:
-        self._stream.stop()
-        self._stream.close()
+        if self._proc is None:
+            return
+        try:
+            self._proc.stdin.close()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self._proc.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            self._proc.kill()
 
 
 def open_audio(config: AudioConfig | None = None, *, dry_run: bool = False):
