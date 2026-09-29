@@ -31,11 +31,17 @@ def main() -> int:
     camera = Camera(CsiSource(config))
     try:
         time.sleep(args.warmup)
-        times = []
+        times: list[float] = []
+        seen: set[float] = set()
         frame = None
-        for _ in range(args.frames):
+        deadline = time.time() + 20.0
+        while len(times) < args.frames and time.time() < deadline:
             frame, t_capture = camera.latest()
-            times.append(t_capture)
+            if t_capture not in seen:  # only count genuinely new frames
+                seen.add(t_capture)
+                times.append(t_capture)
+            else:
+                time.sleep(0.002)
         intervals = [b - a for a, b in zip(times, times[1:]) if b > a]
         fps = 1.0 / (sum(intervals) / len(intervals)) if intervals else 0.0
         out = Path(args.out)
