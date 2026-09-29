@@ -163,6 +163,7 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-09-29 | Do **not** raise `vm.min_free_kbytes`; use `drop_caches` + compaction only | 1 GB min_free deflated MemAvailable ~2 GB (61 MB vs 2078 MB, llama only) and forced ~1 GB swap; `drop_caches` alone loads mmproj and the camera | sysctl A/B; G1 run1 vs run2c |
 | 2026-09-29 | G1 memory near-miss **accepted** (MemAvailable ~574 MB < 800 MB); perf + no-OOM + swap pass | ARCHITECTURE §6 budget itself implies ~0.5 GB free on 8 GB; fallback #4 (Q3_K_M) would pass but breaks vision (blue bus → "white and green") | G1 run6; Q3 bus probe |
 | 2026-09-29 | Bench must tear down its GStreamer pipeline on exit | leaked nvargus clients broke the following camera session | commit 7b4d5fa |
+| 2026-09-29 | Moondream2 + whisper vs Gemma measured; **Gemma kept** | Moondream+whisper is ~1.5 GB lighter (moondream llama-server RSS 2416 MB vs Gemma ~4.6 GB) but vision accuracy was **5/15 vs 15/15** on the bench-1.7 questions (people count → "0", blue bus → "White"); Moondream has no audio or tool-calling, and whisper alone adds ~708 MB | inline bench on `bench_gemma_vision.py` questions, 2026-09-29 |
 | 2026-09-27 | Image token budget: **70 (min=max)** | smallest budget that kept 5/5 vision answers; 140/280 cost prompt time with no accuracy gain | bench 1.7 |
 
 ## Known issues
