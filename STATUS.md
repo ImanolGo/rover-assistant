@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs `drop_caches` (do **not** raise `min_free_kbytes` — see G1). Image assets (robot photo, test frames) in assets/. |
 | 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
-| 2 HAL | 🔄 | ☑ camera ☑ geometry ☑ rover ☑ audio ~ hw: camera ✅ (30.0 fps, 820×616); audio/rover need the operator | fakes + 42 laptop tests green (8e20a30); `hardware_tests/` written; camera test run on the Jetson |
+| 2 HAL | 🔄 | ☑ camera ☑ geometry ☑ rover ☑ audio ~ hw: camera ✅, audio ✅ (3/3); rover pending operator | fakes + 43 laptop tests green; `hardware_tests/` written; camera 30.0 fps, audio records+plays through the UACDemo sink |
 | 3 Perception | ⏳ | ☐ tracker ☐ bearing sign ☐ API/video ☐ §10 perf targets | |
 | 4 Voice | ⏳ | ☐ wake ☐ VAD ☐ STT ☐ TTS ☐ intents ≥90% | |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
@@ -174,4 +174,5 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 3. `uv sync` must keep `tool.uv.sources` for torch/torchvision or PyPI silently installs a cu130 build the JP6 driver rejects (`torch.cuda.is_available()` = False with no obvious error).
 4. Gemma E2B emits thinking in `reasoning_content`; with `"chat_template_kwargs": {"enable_thinking": false}` content is filled correctly. Bench harness uses this; the planner must too.
 5. Ops: long-running benches must run in tmux (a bare background process dies with the shell's process group). The gate script also held nvargus clients when it exited without tearing the pipeline down — fixed in `bench_coexist.py` (7b4d5fa).
-6. G1 clean re-run (2026-09-29): performance/functional criteria pass, swap stable, no OOM; `MemAvailable` ~574 MB is below the 800 MB bar and is an accepted deviation (Q4_K_M cannot leave >800 MB on 8 GB; Q3_K_M would but degrades vision). The 60-min soak (Phase 6) re-tests this under MemProbe._
+6. G1 clean re-run (2026-09-29): performance/functional criteria pass, swap stable, no OOM; `MemAvailable` ~574 MB is below the 800 MB bar and is an accepted deviation (Q4_K_M cannot leave >800 MB on 8 GB; Q3_K_M would but degrades vision). The 60-min soak (Phase 6) re-tests this under MemProbe.
+7. Desktop pipewire/pulseaudio owns the USB audio devices on this image: PortAudio cannot open `hw:0,0` ("Device unavailable") and direct `plughw` is intermittently busy. The audio HAL selects the PulseAudio sink/source by name and plays/captures through `-D pulse` (`PULSE_SINK`/`PULSE_SOURCE`), falling back to `plughw` when no sound server runs. Verified: UACDemoV1.0 sink RUNNING during playback; USB mic source. Headless production must either keep a sound server or rely on the fallback._
