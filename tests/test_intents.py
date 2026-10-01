@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rover.voice.intents import Intent, classify
+from rover.voice.intents import Intent, classify, strip_wake_phrase
 
 
 @pytest.mark.parametrize(
@@ -68,6 +68,25 @@ def test_stop_wins_over_other_words():
 def test_unknown_and_empty():
     assert classify("tell me a story about the moon").name == "unknown"
     assert classify("   ").name == "unknown"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Hey Rover, go to the red cup", "go to the red cup"),
+        ("Hey Rubber.", ""),
+        ("Rofer stop", "stop"),
+        ("Go forward", "Go forward"),
+    ],
+)
+def test_strip_wake_phrase(text, expected):
+    assert strip_wake_phrase(text) == expected
+
+
+def test_classify_handles_command_with_wake_phrase_in_one_breath():
+    assert classify("Hey Rover, go to the red cup").name == "go_to"
+    assert classify("Hey Rover, stop").name == "stop"
+    assert classify("Hey Rover").name == "unknown"
 
 
 def test_intent_is_a_dataclass_with_raw_text():

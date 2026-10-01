@@ -9,7 +9,7 @@ import wave
 import httpx
 import numpy as np
 
-from rover.hal.audio import NullSpeaker
+from rover.hal.audio import NullSpeaker, drain_fd
 from rover.voice.stt import FakeStt, GemmaStt, pcm16_to_wav_bytes
 from rover.voice.tts import (
     FakeTts,
@@ -57,6 +57,12 @@ def test_vad_segmenter_hard_cap_ends_the_turn():
     segmenter = SpeechSegmenter(FakeVad(start_after=0, end_after=None), max_utterance_s=0.0)
     assert segmenter.process(np.ones(1280, dtype=np.int16)) == "start"
     assert segmenter.process(np.ones(1280, dtype=np.int16)) == "end"
+
+
+def test_vad_onset_timeout_when_no_speech_arrives():
+    segmenter = SpeechSegmenter(FakeVad(start_after=999), onset_timeout_s=0.0)
+    assert segmenter.process(np.ones(1280, dtype=np.int16)) == "timeout"
+    assert segmenter.audio().size == 0
 
 
 # --- STT --------------------------------------------------------------------
@@ -138,6 +144,17 @@ def test_play_wav_uses_the_wav_sample_rate(tmp_path):
     play_wav(speaker, str(path))
     assert len(speaker.played) == 1
     assert speaker.played[0].shape[0] == 100
+
+
+def test_drain_fd_discards_buffered_bytes_without_blocking():
+    read_fd, write_fd = os.pipe()
+    try:
+        os.write(write_fd, b"x" * 300)
+        assert drain_fd(read_fd) == 300
+        assert drain_fd(read_fd) == 0  # nothing left, does not block
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
 
 
 def test_default_piper_binary_points_at_the_venv_cli():

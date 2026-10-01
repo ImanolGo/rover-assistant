@@ -22,6 +22,7 @@ class WakeWord:
     def __init__(self, threshold: float = 0.5, cooldown_s: float = 2.0):
         self.threshold = float(threshold)
         self.cooldown_s = float(cooldown_s)
+        self.last_score = 0.0
         self._last_fire = float("-inf")
 
     def score(self, frame: Any) -> float:
@@ -30,6 +31,7 @@ class WakeWord:
     def process(self, frame: Any) -> bool:
         """True exactly when the score crosses the threshold, once per cooldown."""
         score = self.score(frame)
+        self.last_score = score
         now = time.monotonic()
         if score >= self.threshold and (now - self._last_fire) >= self.cooldown_s:
             self._last_fire = now

@@ -64,6 +64,19 @@ _GO_TO = re.compile(
 _ARTICLE = re.compile(r"^(?:the|a|an|my|your|his|her|their)\s+", re.I)
 _WORD = re.compile(r"[a-z0-9]+")
 
+# A leading wake phrase as Gemma may transcribe it: "Hey Rover", "Hey Rubber",
+# "Rover", ... Stripping it lets "Hey Rover, go to the cup" classify as go_to,
+# and lets "Hey Rover." alone mean "no command" rather than "unknown".
+_WAKE_PHRASE = re.compile(
+    r"^\s*(?:(?:hey|hay|hi|a)\b[\s,]*)?r[ou][a-z]{1,5}\b[\s,.!?]*",
+    re.I,
+)
+
+
+def strip_wake_phrase(text: str) -> str:
+    """Remove a leading wake phrase; empty result means the user only woke it."""
+    return _WAKE_PHRASE.sub("", (text or "").strip(), count=1).strip()
+
 
 @dataclass
 class Intent:
@@ -92,9 +105,9 @@ def _split_target(rest: str) -> tuple[str, tuple[str, ...]]:
 
 def classify(text: str) -> Intent:
     """Classify a transcript. ``stop`` is matched first and bypasses everything."""
-    raw = (text or "").strip()
+    raw = strip_wake_phrase(text)
     if not raw:
-        return Intent(name="unknown", raw=raw)
+        return Intent(name="unknown", raw=(text or "").strip())
     lowered = raw.lower()
 
     for pattern, name, response in _SIMPLE:

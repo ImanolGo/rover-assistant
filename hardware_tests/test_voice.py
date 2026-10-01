@@ -28,6 +28,7 @@ from rover.voice.wakeword import make_wakeword
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seconds", type=float, default=60.0)
+    parser.add_argument("--verbose", action="store_true", help="print the live wake-word score")
     args = parser.parse_args()
 
     config = load_config()
@@ -54,11 +55,14 @@ def main() -> int:
         speaker=speaker,
         wake_sound=config.voice.wake_sound,
         on_transcript=on_transcript,
+        flush=capture.flush,
+        max_turn_s=config.voice.max_turn_s,
     )
 
     print("listening — say 'Hey Rover, go to the red cup'")
     deadline = time.time() + args.seconds
     turns = 0
+    last_status = 0.0
     try:
         while time.time() < deadline:
             frame = capture.read_frame()
@@ -66,6 +70,12 @@ def main() -> int:
                 break
             started = time.perf_counter()
             intent = loop.process_frame(frame)
+            if args.verbose and time.time() - last_status > 1.0:
+                last_status = time.time()
+                print(
+                    f"  [state={loop.state} wake_score={loop.wakeword.last_score:.2f}]",
+                    flush=True,
+                )
             if intent is not None:
                 turns += 1
                 elapsed = time.perf_counter() - started

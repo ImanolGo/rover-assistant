@@ -10,6 +10,7 @@ Laptop/sim uses :class:`WavSource` and :class:`NullSpeaker`.
 
 from __future__ import annotations
 
+import fcntl
 import os
 import re
 import shutil
@@ -179,6 +180,29 @@ class WavSource:
         self._wave.close()
 
 
+def drain_fd(fd: int, chunk: int = 65536) -> int:
+    """Discard every byte currently readable on ``fd``; return how many.
+
+    Used to drop mic audio buffered while STT/TTS ran, so the next wake word is
+    heard live instead of after a backlog.
+    """
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    total = 0
+    try:
+        while True:
+            try:
+                data = os.read(fd, chunk)
+            except BlockingIOError:
+                break
+            if not data:
+                break
+            total += len(data)
+    finally:
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+    return total
+
+
 class AlsaCapture:
     """Real capture via ``arecord`` (pulse source when a sound server owns the card)."""
 
@@ -219,6 +243,12 @@ class AlsaCapture:
                 return None
             buffer += chunk
         return np.frombuffer(buffer, dtype=np.int16).copy()
+
+    def flush(self) -> int:
+        """Discard audio already buffered by ``arecord`` (see :func:`drain_fd`)."""
+        if self._proc.stdout is None:
+            return 0
+        return drain_fd(self._proc.stdout.fileno())
 
     def close(self) -> None:
         self._proc.terminate()

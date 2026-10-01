@@ -75,6 +75,7 @@ voice:
   vad_threshold: 0.5                  # (legacy)
   end_silence_ms: 800
   max_utterance_s: 10
+  max_turn_s: 8                      # keep a turn open after a lone "Hey Rover"
   stt_backend: gemma                  # whispercpp | gemma  (decided in Phase 1: Gemma audio wins)
   whisper_model: models/whisper/ggml-base.en.bin
   tts_voice: models/piper/en_US-lessac-medium.onnx     # (legacy voice)

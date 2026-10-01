@@ -150,6 +150,8 @@ class App:
                 speaker=speaker,
                 wake_sound=voice.wake_sound,
                 on_transcript=self._on_transcript,
+                flush=capture.flush,
+                max_turn_s=voice.max_turn_s,
             )
             print("voice: listening for 'Hey Rover'")
             while not self._stop.is_set():

@@ -10,6 +10,7 @@ keeps this module torch-free and testable with a fake.
 from __future__ import annotations
 
 import time
+from collections import deque
 from typing import Callable
 
 import numpy as np
@@ -55,29 +56,44 @@ class SpeechSegmenter:
         self,
         vad: Callable[[np.ndarray], dict | None],
         max_utterance_s: float = 10.0,
+        onset_timeout_s: float = 4.0,
         sample_rate: int = 16000,
+        preroll_frames: int = 4,
     ):
         self._vad = vad
         self.max_utterance_s = float(max_utterance_s)
+        self.onset_timeout_s = float(onset_timeout_s)
         self.sample_rate = int(sample_rate)
+        self._preroll: deque[np.ndarray] = deque(maxlen=max(1, int(preroll_frames)))
         self._pending = np.zeros(0, dtype=np.float32)
-        self._frames: list[np.ndarray] = []
+        self._turn: list[np.ndarray] = []
         self._started = False
         self._start_time = 0.0
+        self._reset_time = 0.0
+        self.reset()
 
     def reset(self) -> None:
         reset = getattr(self._vad, "reset", None)
         if reset is not None:
             reset()
+        self._preroll.clear()
         self._pending = np.zeros(0, dtype=np.float32)
-        self._frames = []
+        self._turn = []
         self._started = False
         self._start_time = 0.0
+        self._reset_time = time.monotonic()
 
     def process(self, frame: np.ndarray) -> str | None:
-        """Feed one int16 frame; return ``"start"``, ``"end"`` or ``None``."""
+        """Feed one int16 frame; return ``"start"``, ``"end"``, ``"timeout"`` or None.
+
+        The turn keeps a short pre-roll so the first phoneme is not clipped, and
+        ``"timeout"`` means no speech arrived within ``onset_timeout_s``.
+        """
         frame = np.asarray(frame, dtype=np.int16)
-        self._frames.append(frame)
+        if self._started:
+            self._turn.append(frame)
+        else:
+            self._preroll.append(frame)
         self._pending = np.concatenate([self._pending, frame.astype(np.float32) / 32768.0])
 
         started_now = False
@@ -91,6 +107,7 @@ class SpeechSegmenter:
                 self._started = True
                 self._start_time = time.monotonic()
                 started_now = True
+                self._turn = list(self._preroll)
             if "end" in event and self._started:
                 return "end"
 
@@ -98,13 +115,15 @@ class SpeechSegmenter:
             return "start"
         if self._started and (time.monotonic() - self._start_time) > self.max_utterance_s:
             return "end"
+        if not self._started and (time.monotonic() - self._reset_time) > self.onset_timeout_s:
+            return "timeout"
         return None
 
     def audio(self) -> np.ndarray:
         """The accumulated turn as int16 (empty if nothing was captured)."""
-        if not self._frames:
+        if not self._turn:
             return np.zeros(0, dtype=np.int16)
-        return np.concatenate(self._frames)
+        return np.concatenate(self._turn)
 
 
 class FakeVad:
@@ -113,6 +132,9 @@ class FakeVad:
     def __init__(self, start_after: int = 0, end_after: int | None = None):
         self.start_after = start_after
         self.end_after = end_after
+        self.calls = 0
+
+    def reset(self) -> None:
         self.calls = 0
 
     def __call__(self, chunk: np.ndarray) -> dict | None:
