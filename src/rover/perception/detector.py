@@ -164,16 +164,23 @@ class FakeDetector:
 
 
 def make_detector(perception: Any, geometry: Any, *, sim: bool = False) -> Detector:
-    """Build the configured detector, or a :class:`FakeDetector` without torch."""
+    """Build the configured detector; in sim, fall back to a fake if unavailable.
+
+    On real hardware a missing engine or missing ultralytics must fail loudly, so
+    the fallback only applies when ``sim`` is set (laptops have no torch/TRT).
+    """
     try:
         import ultralytics  # noqa: F401
-    except ImportError:
+
+        return YoloDetector(
+            geometry,
+            perception.engine,
+            perception.weights_fallback,
+            imgsz=perception.imgsz,
+            conf=perception.conf,
+            tracker=perception.tracker,
+        )
+    except Exception:  # noqa: BLE001 - sim must boot without a model
+        if not sim:
+            raise
         return FakeDetector(geometry=geometry)
-    return YoloDetector(
-        geometry,
-        perception.engine,
-        perception.weights_fallback,
-        imgsz=perception.imgsz,
-        conf=perception.conf,
-        tracker=perception.tracker,
-    )

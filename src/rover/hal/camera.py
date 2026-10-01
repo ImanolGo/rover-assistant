@@ -9,6 +9,7 @@ perception always sees the freshest image instead of a queue.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -164,6 +165,33 @@ class FileSource:
             self._video.release()
 
 
+class SyntheticSource:
+    """Moving-box frames for the laptop sim when no CSI or webcam is available.
+
+    Purely numpy, so it boots with no camera hardware and gives the dashboard
+    something to show.
+    """
+
+    def __init__(self, config: CameraConfig | None = None):
+        self.config = config or CameraConfig()
+        self._t0 = time.time()
+
+    def read(self) -> tuple[np.ndarray, float] | None:
+        width, height = self.config.output
+        elapsed = time.time() - self._t0
+        frame = np.empty((height, width, 3), dtype=np.uint8)
+        frame[:, :] = (40, 30, 20)
+        box_w = max(6, width // 7)
+        box_h = max(6, height // 5)
+        box_x = int((0.5 + 0.45 * math.sin(elapsed * 0.7)) * max(1, width - box_w))
+        box_y = int((0.5 + 0.35 * math.cos(elapsed * 0.9)) * max(1, height - box_h))
+        frame[box_y : box_y + box_h, box_x : box_x + box_w] = (0, 0, 200)
+        time.sleep(1.0 / self.config.fps if self.config.fps else 0.0)
+        return frame, time.time()
+
+    def close(self) -> None: ...
+
+
 class FakeSource:
     """Replays in-memory frames; used by the laptop tests / sim."""
 
@@ -232,6 +260,8 @@ def make_source(config: CameraConfig | None = None) -> FrameSource:
         return UsbSource(config)
     if config.backend == "file":
         return FileSource(config)
+    if config.backend == "synthetic":
+        return SyntheticSource(config)
     raise ValueError(f"unknown camera backend {config.backend!r}")
 
 

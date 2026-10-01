@@ -85,6 +85,20 @@ def test_open_camera_with_injected_source():
         camera.close()
 
 
+def test_synthetic_source_produces_changing_frames():
+    from rover.hal.camera import SyntheticSource
+
+    source = SyntheticSource(CameraConfig(output=(64, 48), fps=1000))
+    try:
+        first = source.read()
+        time.sleep(0.05)
+        second = source.read()
+    finally:
+        source.close()
+    assert first is not None and first[0].shape == (48, 64, 3)
+    assert second is not None and not np.array_equal(first[0], second[0])
+
+
 def test_file_source_loops_images(tmp_path):
     cv2 = pytest.importorskip("cv2")
     for index in range(2):
