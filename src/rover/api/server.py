@@ -27,7 +27,7 @@ import cv2
 import numpy as np
 import psutil
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 _THERMAL_ZONE_DIR = "/sys/devices/virtual/thermal"
@@ -225,6 +225,10 @@ def create_app(context: ApiContext) -> FastAPI:
         return StreamingResponse(
             mjpeg_stream(context), media_type="multipart/x-mixed-replace; boundary=frame"
         )
+
+    @app.get("/frame")
+    def frame() -> Response:
+        return Response(content=encode_jpeg(annotate(context.snapshot())), media_type="image/jpeg")
 
     @app.get("/", response_class=HTMLResponse)
     @app.get("/dashboard", response_class=HTMLResponse)

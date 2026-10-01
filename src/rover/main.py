@@ -69,15 +69,23 @@ class App:
         self._thread: threading.Thread | None = None
         self._frames = 0
         self._last_frame_time = 0.0
+        self._last_t_capture: float | None = None
 
     # --- perception loop -----------------------------------------------------
 
     def perceive_once(self, timeout: float = 2.0) -> bool:
-        """Grab the newest frame, detect, and publish a fresh snapshot."""
+        """Grab the newest frame, detect, and publish a fresh snapshot.
+
+        Returns False when no *new* frame has arrived, so the loop never
+        re-runs the detector on the same image (which would peg the GPU).
+        """
         try:
-            frame, _ = self.camera.latest(timeout=timeout)
+            frame, t_capture = self.camera.latest(timeout=timeout)
         except TimeoutError:
             return False
+        if self._last_t_capture is not None and t_capture <= self._last_t_capture:
+            return False
+        self._last_t_capture = t_capture
         detections = self.detector.detect(frame)
         now = time.time()
         if self._last_frame_time:
@@ -97,7 +105,8 @@ class App:
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            self.perceive_once(timeout=1.0)
+            if not self.perceive_once(timeout=1.0):
+                time.sleep(0.005)
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._loop, name="perception", daemon=True)

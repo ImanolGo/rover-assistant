@@ -93,6 +93,13 @@ def test_encode_jpeg_and_mjpeg_stream():
     assert b"\xff\xd8" in part
 
 
+def test_single_frame_endpoint():
+    response = TestClient(create_app(FakeContext())).get("/frame")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content.startswith(b"\xff\xd8")
+
+
 def test_read_thermal_zones(tmp_path):
     zone = tmp_path / "thermal_zone0"
     zone.mkdir()

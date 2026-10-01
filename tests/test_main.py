@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
+
 from rover.config import load_config
 from rover.main import App, select_source
 from rover.perception.detector import FakeDetector
@@ -43,6 +45,31 @@ def test_app_sim_perceive_once_publishes_a_snapshot():
         assert status["sim"] is True
         assert status["camera_backend"] == "synthetic"
         assert status["frames"] >= 1
+    finally:
+        app.close()
+
+
+class _FrozenSource:
+    """Frame source whose capture timestamp never advances."""
+
+    def __init__(self, frame):
+        self.frame = frame
+        self.closed = False
+
+    def read(self):
+        return self.frame, 123.0
+
+    def close(self):
+        self.closed = True
+
+
+def test_same_frame_is_not_reprocessed():
+    source = _FrozenSource(np.zeros((120, 160, 3), dtype=np.uint8))
+    app = App(_sim_config(), source=source, detector=FakeDetector())
+    try:
+        assert app.perceive_once() is True
+        assert app.perceive_once() is False  # same timestamp -> skipped
+        assert app.status()["frames"] == 1
     finally:
         app.close()
 
