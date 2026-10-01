@@ -10,6 +10,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "httpx",
+    "psutil",
     "pyyaml",
     "sounddevice",
     "soundfile",

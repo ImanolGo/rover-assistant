@@ -1,1 +1,98 @@
-"""dashboard.html placeholder."""
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rover Assistant</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1115; color: #e6e6e6; }
+  header { padding: 12px 18px; background: #161a22; border-bottom: 1px solid #262c38;
+           display: flex; gap: 18px; align-items: baseline; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .state { color: #7fd1ff; font-variant-numeric: tabular-nums; }
+  main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: #161a22; border: 1px solid #262c38; border-radius: 10px; padding: 12px; }
+  .card h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em;
+             color: #8b95a7; font-weight: 600; }
+  img#video { width: 100%; border-radius: 6px; background: #000; display: block; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  td { padding: 3px 0; border-bottom: 1px solid #1e232d; }
+  td.k { color: #8b95a7; }
+  td.v { text-align: right; }
+  form { display: flex; gap: 8px; margin-top: 8px; }
+  input, button { font: inherit; padding: 7px 9px; border-radius: 7px; border: 1px solid #2b3240;
+                  background: #0f1115; color: #e6e6e6; }
+  button { cursor: pointer; background: #1d3a5c; border-color: #29527f; }
+  button.stop { background: #5c1d1d; border-color: #7f2929; }
+  .thermals span { display: inline-block; margin: 2px 6px 2px 0; padding: 2px 7px; border-radius: 20px;
+                   background: #1e232d; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Rover Assistant</h1>
+  <span class="state" id="state">…</span>
+  <span id="fps"></span>
+  <span id="uptime"></span>
+</header>
+<main>
+  <section class="card">
+    <h2>Camera</h2>
+    <img id="video" src="/video" alt="detector view">
+    <form id="cmd" autocomplete="off">
+      <input id="text" placeholder="text command (debug)" style="flex:1" />
+      <button type="submit">Send</button>
+      <button type="button" class="stop" id="stop">STOP</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Status</h2>
+    <table><tbody id="status"></tbody></table>
+  </section>
+  <section class="card thermals" style="grid-column: 1 / -1;">
+    <h2>Thermals (°C)</h2>
+    <div id="thermals"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+function row(k, v) { return `<tr><td class="k">${k}</td><td class="v">${v}</td></tr>`; }
+async function poll() {
+  try {
+    const s = await (await fetch('/status')).json();
+    $('state').textContent = s.state ?? s.status ?? '?';
+    $('fps').textContent = s.fps ? `${s.fps.toFixed(1)} fps` : '';
+    $('uptime').textContent = s.uptime_s ? `up ${Math.round(s.uptime_s)}s` : '';
+    const r = s.resources || {};
+    const mem = r.memory || {};
+    const rows = [
+      ['objects', s.objects ?? '—'],
+      ['bearing', s.bearing_deg != null ? s.bearing_deg.toFixed(1) + '°' : '—'],
+      ['wheels L/R', `${(s.left ?? 0).toFixed(2)} / ${(s.right ?? 0).toFixed(2)}`],
+      ['cpu', (r.cpu_percent ?? 0).toFixed(0) + '%'],
+      ['mem free', (mem.available_mb ?? 0).toFixed(0) + ' MB'],
+      ['mem used', (mem.percent ?? 0).toFixed(0) + '%'],
+      ['load', (r.load_avg || []).join('  ')],
+    ];
+    $('status').innerHTML = rows.map(([k, v]) => row(k, v)).join('');
+    const t = r.temperatures_c || {};
+    $('thermals').innerHTML = Object.entries(t)
+      .map(([k, v]) => `<span>${k}: ${v}</span>`).join('') || '—';
+  } catch (e) { $('state').textContent = 'offline'; }
+  setTimeout(poll, 1000);
+}
+$('cmd').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('text').value.trim();
+  if (!text) return;
+  await fetch('/cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text }) });
+  $('text').value = '';
+});
+$('stop').addEventListener('click', () => fetch('/stop', { method: 'POST' }));
+poll();
+</script>
+</body>
+</html>
