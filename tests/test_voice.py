@@ -11,7 +11,13 @@ import numpy as np
 
 from rover.hal.audio import NullSpeaker
 from rover.voice.stt import FakeStt, GemmaStt, pcm16_to_wav_bytes
-from rover.voice.tts import FakeTts, play_wav, read_pcm_until_idle, split_sentences
+from rover.voice.tts import (
+    FakeTts,
+    default_piper_binary,
+    play_wav,
+    read_pcm_until_idle,
+    split_sentences,
+)
 from rover.voice.vad import FakeVad, SpeechSegmenter
 from rover.voice.wakeword import FakeWakeWord
 
@@ -132,6 +138,10 @@ def test_play_wav_uses_the_wav_sample_rate(tmp_path):
     play_wav(speaker, str(path))
     assert len(speaker.played) == 1
     assert speaker.played[0].shape[0] == 100
+
+
+def test_default_piper_binary_points_at_the_venv_cli():
+    assert default_piper_binary().endswith("piper")
 
 
 def test_fake_tts_records_speech():

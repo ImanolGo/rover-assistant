@@ -12,12 +12,20 @@ from __future__ import annotations
 import re
 import select
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
 
 _SENTENCE = re.compile(r"[^.!?]+[.!?]*")
 PIPER_RATE = 22050  # en_US-lessac-medium
+
+
+def default_piper_binary() -> str:
+    """Resolve the piper CLI next to the running interpreter, else rely on PATH."""
+    candidate = Path(sys.executable).with_name("piper")
+    return str(candidate) if candidate.exists() else "piper"
 
 
 def split_sentences(text: str) -> list[str]:
@@ -69,12 +77,13 @@ class PiperTts:
         model_path: str,
         speaker: Any,
         rate: int = PIPER_RATE,
-        binary: str = "piper",
+        binary: str | None = None,
         idle_s: float = 0.6,
     ):
         self.speaker = speaker
         self.rate = int(rate)
         self.idle_s = float(idle_s)
+        binary = binary or default_piper_binary()
         self._proc = subprocess.Popen(
             [binary, "-m", str(model_path), "--output-raw"],
             stdin=subprocess.PIPE,
