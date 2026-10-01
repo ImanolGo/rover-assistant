@@ -17,20 +17,35 @@ import numpy as np
 VAD_WINDOW = 512  # Silero's 16 kHz window
 
 
+class SileroVad:
+    """Silero ``VADIterator`` wrapped as a resettable ``float32[512] -> dict`` callable."""
+
+    def __init__(self, end_silence_ms: int = 800, threshold: float = 0.5, sample_rate: int = 16000):
+        import torch
+        from silero_vad import VADIterator, load_silero_vad
+
+        self._torch = torch
+        self._iterator = VADIterator(
+            load_silero_vad(onnx=True),
+            sampling_rate=sample_rate,
+            threshold=threshold,
+            min_silence_duration_ms=end_silence_ms,
+        )
+
+    def __call__(self, chunk: np.ndarray) -> dict | None:
+        return self._iterator(self._torch.from_numpy(chunk), return_seconds=False)
+
+    def reset(self) -> None:
+        reset = getattr(self._iterator, "reset_states", None)
+        if reset is not None:
+            reset()
+
+
 def load_silero(
     end_silence_ms: int = 800, threshold: float = 0.5, sample_rate: int = 16000
-) -> Callable[[np.ndarray], dict | None]:
-    """Return a ``float32[512] -> {start|end} | None`` callable backed by Silero."""
-    import torch
-    from silero_vad import VADIterator, load_silero_vad
-
-    iterator = VADIterator(
-        load_silero_vad(onnx=True),
-        sampling_rate=sample_rate,
-        threshold=threshold,
-        min_silence_duration_ms=end_silence_ms,
-    )
-    return lambda chunk: iterator(torch.from_numpy(chunk), return_seconds=False)
+) -> SileroVad:
+    """Build the Silero backend (tests inject a :class:`FakeVad` instead)."""
+    return SileroVad(end_silence_ms=end_silence_ms, threshold=threshold, sample_rate=sample_rate)
 
 
 class SpeechSegmenter:
@@ -51,6 +66,9 @@ class SpeechSegmenter:
         self._start_time = 0.0
 
     def reset(self) -> None:
+        reset = getattr(self._vad, "reset", None)
+        if reset is not None:
+            reset()
         self._pending = np.zeros(0, dtype=np.float32)
         self._frames = []
         self._started = False
