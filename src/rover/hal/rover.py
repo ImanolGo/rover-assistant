@@ -168,10 +168,17 @@ class SerialRover:
         self._target = (0.0, 0.0)
         self._target_time = 0.0
         self._battery_v: float | None = None
-        self._gyro_bias = (0.0, 0.0, 0.0)
+        self._roll_deg = 0.0
+        self._pitch_deg = 0.0
+        self._yaw_deg: float | None = None
+        self._gyro_dps = (0.0, 0.0, 0.0)
+        self._gyro_bias_rad_s = (0.0, 0.0, 0.0)
         self._closing = threading.Event()
         self._threads: list[threading.Thread] = []
 
+        if self.config.feedback and self.config.gyro_bias_calibrate_s > 0:
+            # Robot must be still: average the raw gyro before the reader runs.
+            self._calibrate_gyro(self.config.gyro_bias_calibrate_s)
         if self.config.feedback:
             # Reader first, then enable continuous feedback (legacy ordering).
             self._spawn(self._read_loop)
@@ -210,6 +217,63 @@ class SerialRover:
     def battery(self) -> float | None:
         return self._battery_v
 
+    def heading_deg(self) -> float | None:
+        """Last yaw from feedback, in degrees (None until the first frame)."""
+        return self._yaw_deg
+
+    def gyro_rad_s(self) -> tuple[float, ...]:
+        """Last raw angular velocity ``(gx, gy, gz)`` in rad/s."""
+        return tuple(math.radians(value) for value in self._gyro_dps)
+
+    def gyro_bias_rad_s(self) -> tuple[float, ...]:
+        """Startup gyro bias ``(gx, gy, gz)`` in rad/s, averaged while still."""
+        return self._gyro_bias_rad_s
+
+    def _calibrate_gyro(self, duration_s: float) -> int:
+        """Average the raw gyro for ``duration_s`` while the robot is still.
+
+        Polls ``T=126`` (replied as ``T=1002`` with ``gx/gy/gz`` in deg/s) and
+        stores the mean as the bias, converted to rad/s. Returns the number of
+        samples used; zero leaves the bias at zero (e.g. no IMU answering).
+        """
+        samples: list[tuple[float, float, float]] = []
+        previous_timeout = getattr(self._serial, "timeout", None)
+        try:
+            self._serial.timeout = 0.05  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 - best effort on exotic transports
+            previous_timeout = None
+        try:
+            deadline = time.monotonic() + duration_s
+            while time.monotonic() < deadline:
+                self._send({"T": 126})
+                read_until = time.monotonic() + 0.2
+                while time.monotonic() < read_until:
+                    line = self._serial.readline()
+                    if not line:
+                        break
+                    response = self.parse_feedback(line.decode("utf-8", errors="ignore"))
+                    if (
+                        response
+                        and response.get("T") == 1002
+                        and all(k in response for k in ("gx", "gy", "gz"))
+                    ):
+                        samples.append(tuple(float(response[k]) for k in ("gx", "gy", "gz")))
+                        self._update_attitude(response)
+                        break
+                time.sleep(0.02)
+        finally:
+            if previous_timeout is not None:
+                try:
+                    self._serial.timeout = previous_timeout  # type: ignore[attr-defined]
+                except Exception:  # noqa: BLE001
+                    pass
+        if samples:
+            count = len(samples)
+            self._gyro_bias_rad_s = tuple(
+                math.radians(sum(sample[i] for sample in samples) / count) for i in range(3)
+            )
+        return len(samples)
+
     def _write_loop(self) -> None:
         period = 1.0 / self.config.write_hz
         while not self._closing.is_set():
@@ -233,12 +297,26 @@ class SerialRover:
         except json.JSONDecodeError:
             return None
 
+    def _update_attitude(self, response: dict[str, Any]) -> None:
+        """Store roll/pitch/yaw (degrees) when present (T=1001 and T=1002)."""
+        if "r" in response:
+            self._roll_deg = float(response["r"])
+        if "p" in response:
+            self._pitch_deg = float(response["p"])
+        if "y" in response:
+            self._yaw_deg = float(response["y"])
+
     def handle_feedback(self, response: dict[str, Any]) -> None:
-        """Apply a T=1001/1002/130 feedback object (battery, IMU)."""
-        if response.get("T") in (1001, 130) and "v" in response:
-            self._battery_v = float(response["v"])
-        if response.get("T") == 1002 and all(k in response for k in ("gx", "gy", "gz")):
-            self._gyro_bias = tuple(float(response[k]) for k in ("gx", "gy", "gz"))
+        """Apply a T=1001/1002/130 feedback object (battery, attitude, gyro)."""
+        kind = response.get("T")
+        if kind in (1001, 130):
+            if "v" in response:
+                self._battery_v = float(response["v"])
+            self._update_attitude(response)
+        elif kind == 1002:
+            self._update_attitude(response)
+            if all(k in response for k in ("gx", "gy", "gz")):
+                self._gyro_dps = tuple(float(response[k]) for k in ("gx", "gy", "gz"))
 
     def _read_loop(self) -> None:
         while not self._closing.is_set():

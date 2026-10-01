@@ -7,6 +7,7 @@ The kinematics cases are ported verbatim from the legacy
 from __future__ import annotations
 
 import json
+import math
 import time
 
 import pytest
@@ -176,5 +177,72 @@ def test_handle_feedback_updates_battery():
         assert rover.battery() is None
         rover.handle_feedback({"T": 1001, "v": 11.7})
         assert rover.battery() == pytest.approx(11.7)
+    finally:
+        rover.close()
+
+
+def test_handle_feedback_updates_attitude_and_gyro_is_not_bias():
+    fake = FakeSerial()
+    rover = SerialRover(RoverConfig(feedback=False), serial_port=fake)
+    try:
+        # T=1001 continuous frame carries attitude + battery.
+        rover.handle_feedback({"T": 1001, "v": 12.0, "r": 1.5, "p": -2.0, "y": 33.0})
+        assert rover.heading_deg() == pytest.approx(33.0)
+        assert rover.battery() == pytest.approx(12.0)
+        # T=1002 is the raw IMU reply; its gyro is a sample, not a bias.
+        rover.handle_feedback({"T": 1002, "gx": 1.0, "gy": 2.0, "gz": 15.0})
+        assert rover.gyro_rad_s()[2] == pytest.approx(math.radians(15.0))
+        assert rover.gyro_bias_rad_s() == (0.0, 0.0, 0.0)
+    finally:
+        rover.close()
+
+
+class FakeFeedbackSerial(FakeSerial):
+    """FakeSerial that answers a T=126 poll with a canned T=1002 IMU frame."""
+
+    def __init__(self, gyro=(1.0, -2.0, 17.18), yaw=45.0):
+        super().__init__()
+        self._gyro = gyro
+        self._yaw = yaw
+        self._pending: list[bytes] = []
+
+    def write(self, data: bytes) -> int:
+        self.writes.append(data)
+        try:
+            command = json.loads(data.decode())
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return len(data)
+        if command.get("T") == 126:
+            frame = {
+                "T": 1002,
+                "gx": self._gyro[0],
+                "gy": self._gyro[1],
+                "gz": self._gyro[2],
+                "r": 1.0,
+                "p": 2.0,
+                "y": self._yaw,
+            }
+            self._pending.append((json.dumps(frame) + "\n").encode())
+        return len(data)
+
+    def readline(self) -> bytes:
+        if self._pending:
+            return self._pending.pop(0)
+        time.sleep(0.001)
+        return b""
+
+
+def test_gyro_bias_calibration_averages_raw_gyro():
+    fake = FakeFeedbackSerial(gyro=(1.0, -2.0, 17.18), yaw=45.0)
+    config = RoverConfig(feedback=True, gyro_bias_calibrate_s=0.3, write_hz=100)
+    rover = SerialRover(config, serial_port=fake)
+    try:
+        bias = rover.gyro_bias_rad_s()
+        assert bias[0] == pytest.approx(math.radians(1.0), abs=1e-6)
+        assert bias[1] == pytest.approx(math.radians(-2.0), abs=1e-6)
+        assert bias[2] == pytest.approx(math.radians(17.18), abs=1e-6)
+        assert rover.heading_deg() == pytest.approx(45.0)
+        # A T=126 poll must have gone out before continuous feedback was enabled.
+        assert {"T": 126} in fake.commands()
     finally:
         rover.close()
