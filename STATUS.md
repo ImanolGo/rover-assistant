@@ -1,7 +1,7 @@
 # STATUS.md
 
-**Current phase:** 3 — Perception loop (Phase 2 exit recorded 2026-10-01; see §Phase 2 HAL)
-**Last updated:** 2026-10-01 (Phase 2 complete: rover wheels-up test + gyro calibration on hardware; HEAD 41798d9)
+**Current phase:** 3 — Perception loop (functional complete; detector→motor p90 pending the Phase 5 control loop)
+**Last updated:** 2026-10-01 (Phase 3: config/detector/colour/API/sim; OpenMP cap 517% → 124% CPU; HEAD 4a4d901)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -11,7 +11,7 @@
 | 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs `drop_caches` (do **not** raise `min_free_kbytes` — see G1). Image assets (robot photo, test frames) in assets/. |
 | 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
 | 2 HAL | ✅ | ☑ camera ☑ geometry ☑ rover ☑ audio ☑ hw: camera / audio (3/3) / rover | 45 laptop tests green; all three `hardware_tests/` ran on the robot (2026-10-01). Camera 30.0 fps, audio through the UACDemo sink, rover wheels-up motions + watchdog pass, gyro bias calibrated per boot. See §Phase 2 HAL. |
-| 3 Perception | 🔄 | ☐ tracker ☐ bearing sign ☐ API/video ☐ §10 perf targets | |
+| 3 Perception | 🔄 | ☑ tracker ☑ bearing sign ☑ API/video ☑ §10 camera/perception/brain-CPU · ☐ detector→motor p90 (Phase 5) | YOLO11n TRT + ByteTrack stable ids, correct bearing sign, 27–34 fps in-process; FastAPI + dashboard; `ROVER_SIM=1` synthetic sim; 78 laptop tests. See §Phase 3 Perception. |
 | 4 Voice | ⏳ | ☐ wake ☐ VAD ☐ STT ☐ TTS ☐ intents ≥90% | |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
 | 6 Field | ⏳ | ☐ go_to ≥70% ☐ follow ≥4/5 ☐ describe ≥15/20 ☐ soak | |
@@ -42,10 +42,10 @@ MAXN SUPER, 2026-09-27, commit 359c2d2).
 ### Performance targets (Phase 3)
 | Target | Goal | Measured | Pass |
 |---|---|---|---|
-| Camera process CPU | < 25% of 1 core | | |
-| Perception FPS during Gemma generation | ≥ 15 | | |
-| Brain total CPU | < 200% | | |
-| Detector→motor latency p90 | < 120 ms | | |
+| Camera process CPU | < 25% of 1 core | **22.7%** (BGRx path, bench 1.1) | ✅ |
+| Perception FPS during Gemma generation | ≥ 15 | **54.5–68.6** (GATE G1 run A/B) | ✅ |
+| Brain total CPU | < 200% | **123.9%** (perception+API, after OpenMP cap) | ✅ |
+| Detector→motor latency p90 | < 120 ms | pending — needs the Phase 5 control loop | ⏳ |
 
 ### Phase 2 HAL — hardware verification (Jetson, 2026-10-01, commit 41798d9)
 
@@ -61,6 +61,31 @@ MAXN SUPER, 2026-09-27, commit 359c2d2).
 The gyro bias is **measured each boot, not assumed constant**: this boot's bias is
 near zero, not the legacy ~0.36 rad/s, so a hard-coded constant would have injected
 drift. Command reference: `docs/wave_rover_json_commands.md`.
+
+### Phase 3 Perception — functional verification (Jetson, 2026-10-01, commit 4a4d901)
+
+Ran the real stack on the robot (`sim=false`, CSI camera, `yolo11n_fp16.engine`):
+
+| Check | Result |
+|---|---|
+| Camera + engine load | ✅ CSI 1640×1232 → nvvidconv 820×616; TensorRT FP16 engine loaded; 0 OOM |
+| Perception rate in-process | ✅ **27–34 fps** (target ≥ 15) |
+| Stable track id | ✅ the same object kept `#1` across frames (ByteTrack) |
+| Bearing sign | ✅ object on the left → bearing **−43…−45°** |
+| Overlay / API | ✅ `/frame` + `/video` MJPEG: box, `#id`, class, confidence, bearing, state, L/R bars |
+| Brain CPU | before cap **517%** (5 spin-waiting OMP threads) → after **123.9%** |
+| Brain RSS | 1350 MB |
+| API | `/health` `/status` `/api/resources` `/frame` `/video` `/cmd` `/stop` `/` (dashboard) ✅ |
+
+Modules: `config.py` (YAML → dataclasses, `ROVER_SIM` override),
+`perception/detector.py` (`Detection`, `YoloDetector`, `FakeDetector`),
+`perception/color.py` (HSV), `api/server.py` (+ `dashboard.html`), `main.py`
+(asyncio app). Laptop sim: `ROVER_SIM=1 .venv/bin/rover` (synthetic frames +
+DryRunRover + FakeDetector when torch is absent).
+
+**Deferred:** the `detector→motor p90 < 120 ms` target cannot be measured until
+the control loop/skills exist (Phase 5); recorded here so it is not silently
+skipped.
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
@@ -184,6 +209,8 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-09-27 | Image token budget: **70 (min=max)** | smallest budget that kept 5/5 vision answers; 140/280 cost prompt time with no accuracy gain | bench 1.7 |
 | 2026-10-01 | IMU bias is **calibrated per boot** (poll `T=126`, average `T=1002` gyro), not assumed constant | measured bias this boot is ~0, not the legacy ~0.36 rad/s; a fixed constant would inject drift | on-device 44-sample average → (0.0004, −0.0001, 0.0003) rad/s |
 | 2026-10-01 | Two-machine dev loop: git remote `jetson` (`receive.denyCurrentBranch=updateInstead`) + `scripts/dev_sync.sh`; **GitHub stays source of truth** | fast local→robot push without a GitHub round-trip; `updateInstead` refuses to clobber a dirty Jetson tree | this session; STATUS.md §Known issues 8 |
+| 2026-10-01 | Cap OMP + torch thread pools to 1 in `rover/__init__` | numpy/OpenCV/torch worker pools **spin-wait**; 5 unnamed threads burned ~85% each doing nothing (brain **517%** CPU) | on-device thread dump + A/B: 517% → 123.9%, fps 27–34 |
+| 2026-10-01 | Perception processes only **new** frames (capture-timestamp guard) | the loop re-ran the detector on the same frame at ~1 kHz, which would peg the GPU | sim smoke: 997k frames in seconds → camera-rate |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).
