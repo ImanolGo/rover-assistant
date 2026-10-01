@@ -1,0 +1,175 @@
+{
+  "name": "p4_voice_commands",
+  "date": "2026-10-01T17:28:54",
+  "commit": "aa3b1d2",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "commands": [
+    {
+      "said": "stop",
+      "transcript": "Stop.",
+      "intent": "stop",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.484
+    },
+    {
+      "said": "halt",
+      "transcript": "Holt.",
+      "intent": "unknown",
+      "target": null,
+      "ok": false,
+      "latency_s": 0.557
+    },
+    {
+      "said": "go forward",
+      "transcript": "Go forward.",
+      "intent": "forward",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.525
+    },
+    {
+      "said": "move forward please",
+      "transcript": "Move forward please.",
+      "intent": "forward",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.557
+    },
+    {
+      "said": "reverse",
+      "transcript": "Reverse.",
+      "intent": "backward",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.495
+    },
+    {
+      "said": "turn left",
+      "transcript": "Turn left.",
+      "intent": "turn_left",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.521
+    },
+    {
+      "said": "turn right",
+      "transcript": "Turn right.",
+      "intent": "turn_right",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.533
+    },
+    {
+      "said": "turn around",
+      "transcript": "Turn around.",
+      "intent": "turn_around",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.522
+    },
+    {
+      "said": "come here",
+      "transcript": "Come here.",
+      "intent": "forward",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.53
+    },
+    {
+      "said": "go home",
+      "transcript": "Gohon.",
+      "intent": "unknown",
+      "target": null,
+      "ok": false,
+      "latency_s": 0.566
+    },
+    {
+      "said": "what do you see",
+      "transcript": "what do you see",
+      "intent": "describe",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.63
+    },
+    {
+      "said": "describe the scene",
+      "transcript": "Describe the scene.",
+      "intent": "describe",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.568
+    },
+    {
+      "said": "look around",
+      "transcript": "Look around.",
+      "intent": "describe",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.552
+    },
+    {
+      "said": "follow me",
+      "transcript": "Follow me.",
+      "intent": "follow",
+      "target": null,
+      "ok": true,
+      "latency_s": 0.521
+    },
+    {
+      "said": "is there a blue bus",
+      "transcript": "Is there a blue bus?",
+      "intent": "is_there",
+      "target": "bus",
+      "ok": true,
+      "latency_s": 0.67
+    },
+    {
+      "said": "is there a person",
+      "transcript": "Is there a person?",
+      "intent": "is_there",
+      "target": "person",
+      "ok": true,
+      "latency_s": 0.651
+    },
+    {
+      "said": "go to the red cup",
+      "transcript": "Go to the Red Cup.",
+      "intent": "go_to",
+      "target": "cup",
+      "ok": true,
+      "latency_s": 0.644
+    },
+    {
+      "said": "go to the blue bottle",
+      "transcript": "Go to the blue bottle.",
+      "intent": "go_to",
+      "target": "bottle",
+      "ok": true,
+      "latency_s": 0.671
+    },
+    {
+      "said": "find my green backpack",
+      "transcript": "Find my green backpack.",
+      "intent": "go_to",
+      "target": "backpack",
+      "ok": true,
+      "latency_s": 0.631
+    },
+    {
+      "said": "look for the chair",
+      "transcript": "Look for the chair.",
+      "intent": "go_to",
+      "target": "chair",
+      "ok": true,
+      "latency_s": 0.622
+    }
+  ],
+  "correct": 18,
+  "total": 20,
+  "accuracy": 0.9,
+  "latency_p50_s": 0.557,
+  "latency_p90_s": 0.67,
+  "note": "audio synthesized with Piper (mic recordings pending, PLAN 1.10)"
+}

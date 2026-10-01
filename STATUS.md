@@ -1,7 +1,7 @@
 # STATUS.md
 
-**Current phase:** 3 — Perception loop (functional complete; detector→motor p90 pending the Phase 5 control loop)
-**Last updated:** 2026-10-01 (Phase 3: config/detector/colour/API/sim; OpenMP cap 517% → 124% CPU; HEAD 4a4d901)
+**Current phase:** 5 — Brain: planner, skills, state machine (Phases 3–4 recorded)
+**Last updated:** 2026-10-01 (Phase 4: voice front end verified live on hardware; HEAD 82235d3)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -12,7 +12,7 @@
 | 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
 | 2 HAL | ✅ | ☑ camera ☑ geometry ☑ rover ☑ audio ☑ hw: camera / audio (3/3) / rover | 45 laptop tests green; all three `hardware_tests/` ran on the robot (2026-10-01). Camera 30.0 fps, audio through the UACDemo sink, rover wheels-up motions + watchdog pass, gyro bias calibrated per boot. See §Phase 2 HAL. |
 | 3 Perception | 🔄 | ☑ tracker ☑ bearing sign ☑ API/video ☑ §10 camera/perception/brain-CPU · ☐ detector→motor p90 (Phase 5) | YOLO11n TRT + ByteTrack stable ids, correct bearing sign, 27–34 fps in-process; FastAPI + dashboard; `ROVER_SIM=1` synthetic sim; 78 laptop tests. See §Phase 3 Perception. |
-| 4 Voice | ⏳ | ☐ wake ☐ VAD ☐ STT ☐ TTS ☐ intents ≥90% | |
+| 4 Voice | ✅ | ☑ wake ☑ VAD ☑ STT ☑ TTS ☑ intents ≥90% | Live on hardware: "Hey Rover …" → transcript → intent (`go_to`/`describe`). 20-command bench **18/20 = 90%** intents, p50 0.56 s end-of-speech → intent (Piper-synthesized audio; 1.10 mic recordings pending). Wired into `rover.main`. See §Phase 4 Voice. |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
 | 6 Field | ⏳ | ☐ go_to ≥70% ☐ follow ≥4/5 ☐ describe ≥15/20 ☐ soak | |
 | 7 Deploy | ⏳ | ☐ systemd ☐ doctor ☐ cold boot | |
@@ -86,6 +86,32 @@ DryRunRover + FakeDetector when torch is absent).
 **Deferred:** the `detector→motor p90 < 120 ms` target cannot be measured until
 the control loop/skills exist (Phase 5); recorded here so it is not silently
 skipped.
+
+### Phase 4 Voice — verification (Jetson, 2026-10-01, commit 82235d3)
+
+Modules: `voice/wakeword.py` (openWakeWord "Hey Rover" + cooldown),
+`voice/vad.py` (Silero turn: 800 ms silence ends it, 10 s cap),
+`voice/stt.py` (Gemma audio via llama-server), `voice/tts.py` (persistent Piper,
+sentence by sentence), `voice/intents.py` (legacy `SIMPLE_COMMANDS` + `go_to` /
+`follow` / `describe` / `is_there`, **stop first**), `voice/pipeline.py` (the
+turn loop). Wired into `rover.main`; the `stop` intent zeroes the rover at once.
+
+**20-command bench** (`bench/bench_voice.py`; Piper-synthesized audio, because
+the 1.10 mic recordings are still pending):
+
+| Metric | Result | Target |
+|---|---|---|
+| Intent accuracy | **18/20 = 90%** | ≥ 90% ✅ |
+| End-of-speech → intent p50 | **0.56 s** | recorded ✅ |
+| End-of-speech → intent p90 | 0.67 s | — |
+
+The two misses were STT slips on tiny utterances ("halt" → "Holt", "go home" →
+"Gohon"), not regex errors.
+
+**Live mic** (`hardware_tests/test_voice.py`, real wake model + Silero + Gemma
+STT + Piper): "Go to the blue bottle" → `go_to` (blue, +0.71 s); "What do you
+see?" → `describe` (+0.66 s); "Hey Rover" alone → `unknown`. Notify tone and
+spoken acknowledgement both worked. Raw: `bench/results/p4_voice_commands.json`.
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
@@ -211,6 +237,7 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-01 | Two-machine dev loop: git remote `jetson` (`receive.denyCurrentBranch=updateInstead`) + `scripts/dev_sync.sh`; **GitHub stays source of truth** | fast local→robot push without a GitHub round-trip; `updateInstead` refuses to clobber a dirty Jetson tree | this session; STATUS.md §Known issues 8 |
 | 2026-10-01 | Cap OMP + torch thread pools to 1 in `rover/__init__` | numpy/OpenCV/torch worker pools **spin-wait**; 5 unnamed threads burned ~85% each doing nothing (brain **517%** CPU) | on-device thread dump + A/B: 517% → 123.9%, fps 27–34 |
 | 2026-10-01 | Perception processes only **new** frames (capture-timestamp guard) | the loop re-ran the detector on the same frame at ~1 kHz, which would peg the GPU | sim smoke: 997k frames in seconds → camera-rate |
+| 2026-10-01 | STT confirmed live: **Gemma audio** via llama-server | 20 synthesized commands → 18/20 intents, p50 0.56 s; live "go to the blue bottle" / "what do you see" correct | `bench/bench_voice.py`, `hardware_tests/test_voice.py` |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).
@@ -222,3 +249,5 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 7. Desktop pipewire/pulseaudio owns the USB audio devices on this image: PortAudio cannot open `hw:0,0` ("Device unavailable") and direct `plughw` is intermittently busy. The audio HAL selects the PulseAudio sink/source by name and plays/captures through `-D pulse` (`PULSE_SINK`/`PULSE_SOURCE`), falling back to `plughw` when no sound server runs. Verified: UACDemoV1.0 sink RUNNING during playback; USB mic source. Headless production must either keep a sound server or rely on the fallback._
 8. `bench/results/*.json` are **tracked**, so running any bench on the Jetson dirties its working tree and blocks `scripts/dev_sync.sh` (`updateInstead` will not clobber it). Commit the new results, or discard them with `scripts/dev_sync.sh --discard-results` before pushing code.
 9. The laptop `.venv` runs `pytest`/`ruff` directly, but `uv run`/`uv sync` on x86_64 fail: `tool.uv.sources` pins `torch` to the Jetson cu126 index (aarch64/cp310 wheels only). **Do not** relax that pin — PyPI now ships aarch64 torch wheels (cu130) that the JP6 driver rejects (Known issue 3). The source-marker fallback was tried and collapses to PyPI on this uv version, so the pin stays. Use `.venv/bin/pytest` locally; keep `uv run` for the Jetson. (Laptop sim in Phase 3 must therefore use `.venv/bin/rover`, not `uv run rover`.)
+10. Voice turns start capturing at wake detection, so saying "Hey Rover" and then pausing yields an extra `unknown` turn (the wake word itself). Harmless — no action is taken — but a pre-roll trim is a later refinement.
+11. Tiny one-word utterances ("halt", "go home") are occasionally mis-transcribed by Gemma audio ("Holt", "Gohon") and fall through to `unknown`; the regex table itself matches them. Longer phrasing is robust (90% on the 20-command bench).
