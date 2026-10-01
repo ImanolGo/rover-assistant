@@ -71,6 +71,20 @@ class VoiceLoop:
         self.segmenter.reset()
         self._flush()
 
+    def _resume_listening(self) -> None:
+        """Return to idle: clear VAD + wake state and drop buffered audio.
+
+        Resetting the wake model matters: its streaming context still holds the
+        wake word, so without it the detector re-fires the instant listening
+        resumes (no fresh chime, looks "stuck").
+        """
+        self.state = LISTENING
+        self.segmenter.reset()
+        reset = getattr(self.wakeword, "reset", None)
+        if reset is not None:
+            reset()
+        self._flush()
+
     def _transcribe(self, audio: np.ndarray) -> str:
         text = self.stt.transcribe(audio)
         if self.on_transcript is not None:
@@ -78,10 +92,9 @@ class VoiceLoop:
         return text
 
     def _finish(self, intent: Intent) -> Intent:
-        self.state = LISTENING
         if self.tts is not None and intent.response:
             self.tts.say(intent.response)
-        self._flush()
+        self._resume_listening()
         return intent
 
     def process_frame(self, frame: np.ndarray) -> Intent | None:
@@ -98,19 +111,15 @@ class VoiceLoop:
                 self._listen_again()  # the wake word only; wait for the command
                 return None
             if not clean:
-                self.state = LISTENING
-                self._flush()
+                self._resume_listening()
                 return None
             return self._finish(classify(clean))
         if event == "timeout":
             if time.monotonic() < self._turn_deadline:
                 self._listen_again()
                 return None
-            self.state = LISTENING
-            self._flush()
+            self._resume_listening()
             return None
         if time.monotonic() > self._turn_deadline:
-            self.state = LISTENING
-            self.segmenter.reset()
-            self._flush()
+            self._resume_listening()
         return None

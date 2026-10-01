@@ -69,6 +69,36 @@ def test_wake_plays_notify_sound_and_ack_is_spoken(tmp_path):
     assert tts.spoken == ["Turning left."]
 
 
+class SpyWake(FakeWakeWord):
+    """FakeWakeWord that counts how often it is reset."""
+
+    def __init__(self, scores, **kwargs):
+        super().__init__(scores, **kwargs)
+        self.resets = 0
+
+    def reset(self) -> None:
+        super().reset()
+        self.resets += 1
+
+
+def test_wakeword_is_reset_when_a_turn_finishes():
+    wake = SpyWake([0.9])
+    loop = VoiceLoop(wake, _segmenter(), FakeStt("turn left"))
+    loop.process_frame(ZERO)  # wake -> open turn
+    intent = _drive_to_intent(loop)
+    assert intent is not None and intent.name == "turn_left"
+    assert wake.resets >= 1
+
+
+def test_wake_can_fire_again_after_a_turn():
+    loop = VoiceLoop(FakeWakeWord([0.9], cooldown_s=0.0), _segmenter(), FakeStt("stop"))
+    loop.process_frame(ZERO)
+    _drive_to_intent(loop)
+    assert loop.state == LISTENING
+    assert loop.process_frame(ZERO) is None  # a fresh wake re-opens the turn
+    assert loop.state == RECORDING
+
+
 class ScriptedStt:
     """Returns one transcript per turn, repeating the last if exhausted."""
 

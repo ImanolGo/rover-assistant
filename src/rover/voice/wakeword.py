@@ -28,6 +28,10 @@ class WakeWord:
     def score(self, frame: Any) -> float:
         raise NotImplementedError
 
+    def reset(self) -> None:
+        """Clear residual detection state after a turn (cooldown is kept)."""
+        self.last_score = 0.0
+
     def process(self, frame: Any) -> bool:
         """True exactly when the score crosses the threshold, once per cooldown."""
         score = self.score(frame)
@@ -55,6 +59,14 @@ class OpenWakeWord(WakeWord):
             return float(predictions[self.keyword])
         return float(max(predictions.values(), default=0.0))
 
+    def reset(self) -> None:
+        super().reset()
+        # Drop openWakeWord's streaming context, or the wake word lingers in its
+        # internal buffer and re-triggers the moment listening resumes.
+        reset = getattr(self._model, "reset", None)
+        if reset is not None:
+            reset()
+
 
 class FakeWakeWord(WakeWord):
     """Scripted scores for laptop tests/sim; cycles through ``scores``."""
@@ -70,6 +82,10 @@ class FakeWakeWord(WakeWord):
         value = self._scores[self._index % len(self._scores)]
         self._index += 1
         return float(value)
+
+    def reset(self) -> None:
+        super().reset()
+        self._index = 0
 
 
 def make_wakeword(model_path: str, threshold: float = 0.5, cooldown_s: float = 2.0) -> WakeWord:
