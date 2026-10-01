@@ -1,7 +1,7 @@
 # STATUS.md
 
-**Current phase:** 2 — HAL port (Phase 1 exit recorded 2026-09-29; see GATE G1)
-**Last updated:** 2026-09-29 20:25 CEST (Phase 2 HAL + G1 clean re-run; HEAD e6d9fe2)
+**Current phase:** 3 — Perception loop (Phase 2 exit recorded 2026-10-01; see §Phase 2 HAL)
+**Last updated:** 2026-10-01 (Phase 2 complete: rover wheels-up test + gyro calibration on hardware; HEAD 41798d9)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -10,8 +10,8 @@
 |---|---|---|---|
 | 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs `drop_caches` (do **not** raise `min_free_kbytes` — see G1). Image assets (robot photo, test frames) in assets/. |
 | 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
-| 2 HAL | 🔄 | ☑ camera ☑ geometry ☑ rover ☑ audio ~ hw: camera ✅, audio ✅ (3/3); rover pending operator | fakes + 43 laptop tests green; `hardware_tests/` written; camera 30.0 fps, audio records+plays through the UACDemo sink |
-| 3 Perception | ⏳ | ☐ tracker ☐ bearing sign ☐ API/video ☐ §10 perf targets | |
+| 2 HAL | ✅ | ☑ camera ☑ geometry ☑ rover ☑ audio ☑ hw: camera / audio (3/3) / rover | 45 laptop tests green; all three `hardware_tests/` ran on the robot (2026-10-01). Camera 30.0 fps, audio through the UACDemo sink, rover wheels-up motions + watchdog pass, gyro bias calibrated per boot. See §Phase 2 HAL. |
+| 3 Perception | 🔄 | ☐ tracker ☐ bearing sign ☐ API/video ☐ §10 perf targets | |
 | 4 Voice | ⏳ | ☐ wake ☐ VAD ☐ STT ☐ TTS ☐ intents ≥90% | |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
 | 6 Field | ⏳ | ☐ go_to ≥70% ☐ follow ≥4/5 ☐ describe ≥15/20 ☐ soak | |
@@ -46,6 +46,21 @@ MAXN SUPER, 2026-09-27, commit 359c2d2).
 | Perception FPS during Gemma generation | ≥ 15 | | |
 | Brain total CPU | < 200% | | |
 | Detector→motor latency p90 | < 120 ms | | |
+
+### Phase 2 HAL — hardware verification (Jetson, 2026-10-01, commit 41798d9)
+
+| Check | Result | Notes |
+|---|---|---|
+| Camera CSI capture | ✅ 30.0 fps @ 820×616 | gi/Gst appsink, `drop=true max-buffers=1` |
+| Audio capture + playback | ✅ 3/3 | pulseaudio (`-D pulse`, select by name); UACDemoV1.0 sink RUNNING |
+| Rover serial + feedback | ✅ | `/dev/ttyTHS1` @115200, RTS/DTR False; battery **12.15 V**, attitude streaming (`T=1001`) |
+| Rover motion (wheels up) | ✅ | spin left, spin right, forward 0.5 s each at cap 0.15 |
+| Rover watchdog | ✅ | wheels zero 0.5 s after the last command goes stale |
+| Gyro bias calibration | ✅ | `T=126` → `T=1002`; 44 samples over 2 s averaged to **(0.0004, −0.0001, 0.0003) rad/s** |
+
+The gyro bias is **measured each boot, not assumed constant**: this boot's bias is
+near zero, not the legacy ~0.36 rad/s, so a hard-coded constant would have injected
+drift. Command reference: `docs/wave_rover_json_commands.md`.
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
@@ -167,6 +182,8 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-09-29 | Labeled vision set `bench_vision_accuracy.py` (15 small + real images): **Gemma 14/15 (93%)**; Moondream via llama.cpp 4/15 but ~half were HTTP 500s, not model errors | Gemma: colour 8/8, presence 3/3, count 2/3 (only miss: 4 squares vs 3). Moondream on a **fresh** server answers correctly ("Blue" bus, colours) then intermittently returns `failed to process mtmd chunk` | p17b_vision_accuracy_gemma.json, p17b_vision_accuracy_moondream_llamacpp.json |
 | 2026-09-29 | "Use llama.cpp directly for Moondream": possible but **not production-ready** with these files | pinned llama.cpp v0.5.0 warns "missing pre-tokenizer", "ffn up/down are swapped", "generation quality will be degraded"; the GGUF has no chat template (needs a hand-written one) and the server throws intermittent mtmd 500s. A GGUF converted for this build would be required; accuracy is then still below Gemma | moondream_server.log; bench_vision_accuracy.py |
 | 2026-09-27 | Image token budget: **70 (min=max)** | smallest budget that kept 5/5 vision answers; 140/280 cost prompt time with no accuracy gain | bench 1.7 |
+| 2026-10-01 | IMU bias is **calibrated per boot** (poll `T=126`, average `T=1002` gyro), not assumed constant | measured bias this boot is ~0, not the legacy ~0.36 rad/s; a fixed constant would inject drift | on-device 44-sample average → (0.0004, −0.0001, 0.0003) rad/s |
+| 2026-10-01 | Two-machine dev loop: git remote `jetson` (`receive.denyCurrentBranch=updateInstead`) + `scripts/dev_sync.sh`; **GitHub stays source of truth** | fast local→robot push without a GitHub round-trip; `updateInstead` refuses to clobber a dirty Jetson tree | this session; STATUS.md §Known issues 8 |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).
@@ -176,3 +193,5 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 5. Ops: long-running benches must run in tmux (a bare background process dies with the shell's process group). The gate script also held nvargus clients when it exited without tearing the pipeline down — fixed in `bench_coexist.py` (7b4d5fa).
 6. G1 clean re-run (2026-09-29): performance/functional criteria pass, swap stable, no OOM; `MemAvailable` ~574 MB is below the 800 MB bar and is an accepted deviation (Q4_K_M cannot leave >800 MB on 8 GB; Q3_K_M would but degrades vision). The 60-min soak (Phase 6) re-tests this under MemProbe.
 7. Desktop pipewire/pulseaudio owns the USB audio devices on this image: PortAudio cannot open `hw:0,0` ("Device unavailable") and direct `plughw` is intermittently busy. The audio HAL selects the PulseAudio sink/source by name and plays/captures through `-D pulse` (`PULSE_SINK`/`PULSE_SOURCE`), falling back to `plughw` when no sound server runs. Verified: UACDemoV1.0 sink RUNNING during playback; USB mic source. Headless production must either keep a sound server or rely on the fallback._
+8. `bench/results/*.json` are **tracked**, so running any bench on the Jetson dirties its working tree and blocks `scripts/dev_sync.sh` (`updateInstead` will not clobber it). Commit the new results, or discard them with `scripts/dev_sync.sh --discard-results` before pushing code.
+9. The laptop `.venv` runs `pytest`/`ruff` directly, but `uv run`/`uv sync` on x86_64 fail: `tool.uv.sources` pins `torch` to the Jetson cu126 index (aarch64/cp310 wheels only). **Do not** relax that pin — PyPI now ships aarch64 torch wheels (cu130) that the JP6 driver rejects (Known issue 3). The source-marker fallback was tried and collapses to PyPI on this uv version, so the pin stays. Use `.venv/bin/pytest` locally; keep `uv run` for the Jetson. (Laptop sim in Phase 3 must therefore use `.venv/bin/rover`, not `uv run rover`.)

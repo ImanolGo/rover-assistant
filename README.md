@@ -128,8 +128,24 @@ bash scripts/export_yolo.sh            # TensorRT engine, built on-device
 uv run rover                           # wheels up first!
 ```
 
-A laptop works too: `ROVER_SIM=1 uv run rover` substitutes the camera, mic
-and motors with fakes.
+A laptop works too: `ROVER_SIM=1 .venv/bin/rover` substitutes the camera, mic
+and motors with fakes. (`uv run` is reserved for the Jetson — see STATUS.md
+Known issue 9.)
+
+### Two-machine workflow (edit on the laptop, test on the Jetson)
+
+`origin` is GitHub and stays the source of truth. For the fast loop, push the
+current branch straight into the Jetson checkout over SSH:
+
+```bash
+scripts/dev_sync.sh            # push current branch to the Jetson working tree
+scripts/dev_sync.sh --test     # ...then run pytest there
+```
+
+One-time setup: `ssh jetson 'cd ~/repos/rover-assistant && git config
+receive.denyCurrentBranch updateInstead'`, then `git remote add jetson
+jetson:repos/rover-assistant`. Pushing is refused if the Jetson tree is dirty
+(so committed bench output is never clobbered).
 
 ## Documentation
 
