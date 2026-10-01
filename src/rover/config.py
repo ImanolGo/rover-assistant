@@ -31,6 +31,7 @@ class PerceptionConfig:
     imgsz: int = 640
     conf: float = 0.35
     tracker: str = "bytetrack.yaml"
+    torch_threads: int = 1
     target_classes_h_stop: dict[str, float] = field(default_factory=dict)
     calibration_file: str = "config/camera_calibration.yaml"
     undistort_alpha: float = 1.0
@@ -193,6 +194,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         imgsz=int(perception_raw.get("imgsz", 640)),
         conf=float(perception_raw.get("conf", 0.35)),
         tracker=perception_raw.get("tracker", "bytetrack.yaml"),
+        torch_threads=int(perception_raw.get("torch_threads", 1)),
         target_classes_h_stop=dict(perception_raw.get("target_classes_h_stop") or {}),
         calibration_file=camera_raw.get("calibration_file", "config/camera_calibration.yaml"),
         undistort_alpha=float(camera_raw.get("undistort_alpha", 1.0)),

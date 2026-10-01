@@ -22,6 +22,7 @@ def test_load_real_config_maps_every_section():
     assert config.rover.min_wheel_pwm == pytest.approx(0.30)
     assert config.perception.conf == pytest.approx(0.35)
     assert config.perception.tracker == "bytetrack.yaml"
+    assert config.perception.torch_threads == 1
     assert config.perception.target_classes_h_stop["person"] == pytest.approx(0.60)
     assert config.control.tick_hz == pytest.approx(10.0)
     assert config.control.follow_h_frac == (0.50, 0.65)

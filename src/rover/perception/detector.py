@@ -93,9 +93,18 @@ class YoloDetector:
         conf: float = 0.35,
         tracker: str = "bytetrack.yaml",
         device: str | int | None = None,
+        threads: int = 1,
     ):
         from ultralytics import YOLO  # lazy: keeps laptops torch-free
 
+        # Cap torch's CPU thread pool: inference is on the GPU, and the default
+        # (one worker per core) burned ~425% CPU in the single brain process.
+        try:
+            import torch
+
+            torch.set_num_threads(max(1, int(threads)))
+        except (ImportError, RuntimeError):  # pragma: no cover - torch details
+            pass
         self.geometry = geometry
         self.imgsz = int(imgsz)
         self.conf = float(conf)
@@ -179,6 +188,7 @@ def make_detector(perception: Any, geometry: Any, *, sim: bool = False) -> Detec
             imgsz=perception.imgsz,
             conf=perception.conf,
             tracker=perception.tracker,
+            threads=getattr(perception, "torch_threads", 1),
         )
     except Exception:  # noqa: BLE001 - sim must boot without a model
         if not sim:
