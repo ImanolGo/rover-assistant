@@ -68,6 +68,7 @@ audio:
   frame_ms: 80
 
 voice:
+  enabled: true                       # start the wake->VAD->STT listener (hardware)
   wakeword_model: models/wake_word/hey_roe_ver.onnx   # (legacy)
   wakeword_threshold: 0.5
   speex_noise_suppression: true       # (legacy)

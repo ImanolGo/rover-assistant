@@ -24,6 +24,7 @@ from rover.hal.camera import FrameSource, open_camera
 from rover.hal.rover import Rover, open_rover
 from rover.perception.detector import Detector, make_detector
 from rover.perception.geometry import CameraGeometry
+from rover.voice.intents import Intent
 
 _STOP_RE = re.compile(r"\b(stop|halt|freeze)\b", re.IGNORECASE)
 
@@ -63,10 +64,14 @@ class App:
         self.right = 0.0
         self.fps = 0.0
         self.last_command: str | None = None
+        self.last_transcript = ""
+        self.last_intent: Intent | None = None
+        self.voice_error: str | None = None
         self._lock = threading.Lock()
         self._snapshot = VideoSnapshot(state=self.state)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._voice_thread: threading.Thread | None = None
         self._frames = 0
         self._last_frame_time = 0.0
         self._last_t_capture: float | None = None
@@ -112,6 +117,68 @@ class App:
         self._thread = threading.Thread(target=self._loop, name="perception", daemon=True)
         self._thread.start()
 
+    # --- voice listener ------------------------------------------------------
+
+    def start_voice(self) -> None:
+        self._voice_thread = threading.Thread(target=self._voice_loop, name="voice", daemon=True)
+        self._voice_thread.start()
+
+    def _voice_loop(self) -> None:
+        try:
+            from rover.hal.audio import AlsaCapture, AlsaSpeaker
+            from rover.voice.pipeline import VoiceLoop
+            from rover.voice.stt import GemmaStt
+            from rover.voice.tts import PiperTts
+            from rover.voice.vad import SpeechSegmenter, load_silero
+            from rover.voice.wakeword import make_wakeword
+
+            voice = self.config.voice
+            capture = AlsaCapture(self.config.audio)
+            speaker = AlsaSpeaker(self.config.audio)
+            wakeword = make_wakeword(voice.wakeword_model, threshold=voice.wakeword_threshold)
+            segmenter = SpeechSegmenter(
+                load_silero(end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold),
+                max_utterance_s=voice.max_utterance_s,
+            )
+            stt = GemmaStt(self.config.planner.url)
+            tts = PiperTts(voice.tts_voice, speaker)
+            loop = VoiceLoop(
+                wakeword,
+                segmenter,
+                stt,
+                tts=tts,
+                speaker=speaker,
+                wake_sound=voice.wake_sound,
+                on_transcript=self._on_transcript,
+            )
+            print("voice: listening for 'Hey Rover'")
+            while not self._stop.is_set():
+                frame = capture.read_frame()
+                if frame is None:
+                    time.sleep(0.01)
+                    continue
+                intent = loop.process_frame(frame)
+                if intent is not None:
+                    self._on_intent(intent)
+            capture.close()
+            tts.close()
+            stt.close()
+        except Exception as exc:  # noqa: BLE001 - voice must never kill the brain
+            self.voice_error = f"{type(exc).__name__}: {exc}"
+            print(f"voice disabled: {self.voice_error}")
+
+    def _on_transcript(self, text: str) -> None:
+        self.last_transcript = text
+        print(f"voice: transcript={text!r}")
+
+    def _on_intent(self, intent: Intent) -> None:
+        self.last_intent = intent
+        print(f"voice: intent={intent.name} target={intent.target} attrs={intent.attributes}")
+        if intent.name == "stop":
+            self.stop()
+        else:
+            self.state = intent.name.upper()
+
     # --- ApiContext ----------------------------------------------------------
 
     def status(self) -> dict[str, Any]:
@@ -126,6 +193,10 @@ class App:
             "right": round(self.right, 3),
             "bearing_deg": bearing,
             "last_command": self.last_command,
+            "transcript": self.last_transcript,
+            "intent": self.last_intent.name if self.last_intent else None,
+            "target": self.last_intent.target if self.last_intent else None,
+            "voice_error": self.voice_error,
             "camera_backend": self.config.camera.backend,
             "sim": self.config.sim,
             "frames": self._frames,
@@ -167,6 +238,8 @@ class App:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+        if self._voice_thread is not None:
+            self._voice_thread.join(timeout=2.0)
         self.camera.close()
         self.detector.close()
         self.rover.close()
@@ -175,6 +248,8 @@ class App:
         import uvicorn
 
         self.start()
+        if self.config.voice.enabled and not self.config.sim:
+            self.start_voice()
         server = uvicorn.Server(
             uvicorn.Config(
                 create_app(self),

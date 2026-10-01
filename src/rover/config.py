@@ -61,6 +61,7 @@ class ControlConfig:
 class VoiceConfig:
     """Wake word / VAD / STT / TTS tunables (PLAN Phase 4)."""
 
+    enabled: bool = True
     wakeword_model: str = "models/wake_word/hey_roe_ver.onnx"
     wakeword_threshold: float = 0.5
     speex_noise_suppression: bool = True
@@ -216,6 +217,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         max_replans=int(control_raw.get("max_replans", 2)),
     )
     voice = VoiceConfig(
+        enabled=bool(voice_raw.get("enabled", True)),
         wakeword_model=voice_raw.get("wakeword_model", VoiceConfig.wakeword_model),
         wakeword_threshold=float(voice_raw.get("wakeword_threshold", 0.5)),
         speex_noise_suppression=bool(voice_raw.get("speex_noise_suppression", True)),
