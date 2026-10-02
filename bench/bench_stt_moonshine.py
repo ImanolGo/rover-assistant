@@ -103,9 +103,13 @@ def run_moonshine(model_name: str, dataset, pace: float, contention=None) -> dic
     arch = getattr(ModelArch, MOONSHINE[model_name][1])
     model_dir = _model_dir(MOONSHINE[model_name][0])
 
-    rows = []
     proc = psutil.Process()
+    baseline_rss = proc.memory_info().rss
     proc.cpu_percent(None)
+    transcriber = Transcriber(model_dir, arch)  # load once per candidate
+    loaded_rss = proc.memory_info().rss
+
+    rows = []
     for text, audio, want_intent, want_target in dataset:
         final: list[str] = []
         partials: list[str] = []
@@ -116,23 +120,24 @@ def run_moonshine(model_name: str, dataset, pace: float, contention=None) -> dic
             elif isinstance(event, LineUpdated):
                 partials.append(event.line.text)
 
-        transcriber = Transcriber(model_dir, arch)
-        transcriber.add_listener(listener)
-        transcriber.start()
+        stream = transcriber.create_stream()
+        stream.add_listener(listener)
+        stream.start()
         stop_partial = None
         t_feed_start = time.perf_counter()
         for i in range(0, len(audio), FRAME):
             chunk = audio[i : i + FRAME]
-            transcriber.add_audio(chunk.tolist(), 16000)
-            if stop_partial is None and any(
-                w in strip_wake_phrase(partials[-1] if partials else "").lower().split()
-                for w in STOP_WORDS
-            ):
+            stream.add_audio(chunk.tolist(), 16000)
+            partial = strip_wake_phrase(partials[-1]) if partials else ""
+            if stop_partial is None and any(word in partial.lower().split() for word in STOP_WORDS):
                 stop_partial = time.perf_counter() - t_feed_start
             time.sleep(pace)
         t_end = time.perf_counter()
-        transcriber.stop()
+        stream.stop()
         latency = time.perf_counter() - t_end
+        close = getattr(stream, "close", None)
+        if close is not None:
+            close()
         hypothesis = " ".join(final).strip() or (partials[-1] if partials else "")
         intent = classify(hypothesis)
         rows.append(
@@ -150,7 +155,7 @@ def run_moonshine(model_name: str, dataset, pace: float, contention=None) -> dic
         )
         if contention is not None:
             contention.wait()
-    return _summary(model_name, rows, proc)
+    return _summary(model_name, rows, proc, baseline_rss, loaded_rss)
 
 
 def run_gemma(dataset, contention=None) -> dict:
@@ -186,7 +191,13 @@ def run_gemma(dataset, contention=None) -> dict:
     return _summary("gemma", rows, proc)
 
 
-def _summary(name: str, rows: list[dict], proc: psutil.Process) -> dict:
+def _summary(
+    name: str,
+    rows: list[dict],
+    proc: psutil.Process,
+    baseline_rss: int | None = None,
+    loaded_rss: int | None = None,
+) -> dict:
     latencies = sorted(row["latency_s"] for row in rows)
     p90 = latencies[min(len(latencies) - 1, int(0.9 * len(latencies)))]
     correct = sum(row["ok"] for row in rows)
@@ -200,7 +211,7 @@ def _summary(name: str, rows: list[dict], proc: psutil.Process) -> dict:
         "latency_p50_s": round(statistics.median(latencies), 3) if rows else None,
         "latency_p90_s": round(p90, 3) if rows else None,
         "cpu_percent": round(proc.cpu_percent(None), 1),
-        "rss_mb": round(proc.memory_info().rss / 1e6, 1),
+        "rss_mb": round(((loaded_rss or proc.memory_info().rss) - (baseline_rss or 0)) / 1e6, 1),
     }
 
 
