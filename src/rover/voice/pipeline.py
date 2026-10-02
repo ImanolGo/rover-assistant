@@ -1,21 +1,26 @@
 """voice.pipeline: the wake -> VAD -> STT -> intent turn loop.
 
-A small synchronous state machine fed one 80 ms frame at a time. On wake it
-plays the notify sound and opens a VAD turn; when a turn ends it transcribes,
-classifies, and speaks the acknowledgement (if any). The brain acts on the
-returned :class:`~rover.voice.intents.Intent`.
+Two layers:
 
-Two robustness rules learned on hardware:
+- :class:`VoiceLoop` is the listener-side state machine. It is fed one 80 ms
+  frame at a time, runs the wake word and VAD, and finishes a turn either inline
+  (tests, hardware: no ``worker``) or by handing the turn audio to a
+  :class:`ThreadedWorker` so the listener never blocks on STT or TTS.
+- :class:`AudioQueue` + :class:`CapturePump` put a bounded buffer between the
+  mic and the listener: the capture thread always drains arecord (so ALSA never
+  overruns), and when the listener is behind the oldest frames are dropped and
+  counted rather than letting stale audio swallow the next wake word.
 
-- If a turn ends but the transcript is only the wake phrase ("Hey Rover"), the
-  turn stays open (up to ``max_turn_s``) for the command, so
-  "Hey Rover" [pause] "go to the cup" works.
-- ``flush`` is called whenever listening resumes, discarding audio the mic
-  buffered while STT/TTS ran, so the next wake word is heard live.
+Continuation note: the inline path keeps a turn open when a transcript is only
+the wake phrase ("Hey Rover" ... pause ... command). The threaded path does not
+(it would need STT in the listener); say "Hey Rover, <command>" in one breath,
+or wake again. Barge-in / stop-without-wake is deferred (C3, C6).
 """
 
 from __future__ import annotations
 
+import queue
+import threading
 import time
 from typing import Any, Callable
 
@@ -28,8 +33,138 @@ LISTENING = "LISTENING"
 RECORDING = "RECORDING"
 
 
+class AudioQueue:
+    """Bounded frame queue: drops the *oldest* frame when full and counts drops."""
+
+    def __init__(self, maxsize: int = 25):
+        self._queue: queue.Queue = queue.Queue(maxsize=maxsize)
+        self.dropped = 0
+
+    def put(self, frame: np.ndarray) -> None:
+        try:
+            self._queue.put_nowait(frame)
+        except queue.Full:
+            try:
+                self._queue.get_nowait()  # drop the oldest
+                self.dropped += 1
+            except queue.Empty:
+                pass
+            try:
+                self._queue.put_nowait(frame)
+            except queue.Full:
+                pass
+
+    def get(self, timeout: float = 0.5) -> np.ndarray | None:
+        try:
+            return self._queue.get(timeout=timeout)
+        except queue.Empty:
+            return None
+
+    def drain(self) -> int:
+        """Discard everything buffered (after a turn, before listening again)."""
+        count = 0
+        while True:
+            try:
+                self._queue.get_nowait()
+                count += 1
+            except queue.Empty:
+                return count
+
+    def qsize(self) -> int:
+        return self._queue.qsize()
+
+
+class CapturePump:
+    """Thread that reads a capture source into an :class:`AudioQueue`."""
+
+    def __init__(self, source: Any, audio_queue: AudioQueue, name: str = "capture"):
+        self.source = source
+        self.queue = audio_queue
+        self.name = name
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._loop, name=self.name, daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            frame = self.source.read_frame()
+            if frame is None:
+                time.sleep(0.005)
+                continue
+            self.queue.put(frame)
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+
+
+class ThreadedWorker:
+    """Serial STT -> intent -> TTS worker. One pending turn max; never blocks caller."""
+
+    def __init__(
+        self,
+        stt: Any,
+        tts: Any = None,
+        on_intent: Callable[[Intent], None] | None = None,
+        on_transcript: Callable[[str], None] | None = None,
+    ):
+        self.stt = stt
+        self.tts = tts
+        self.on_intent = on_intent
+        self.on_transcript = on_transcript
+        self._queue: queue.Queue = queue.Queue(maxsize=1)
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self.dropped = 0
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._loop, name="stt-worker", daemon=True)
+        self._thread.start()
+
+    def submit(self, audio: np.ndarray, deadline: float | None = None) -> None:
+        try:
+            self._queue.put_nowait(audio)
+        except queue.Full:
+            try:
+                self._queue.get_nowait()  # replace the pending turn
+                self.dropped += 1
+            except queue.Empty:
+                pass
+            try:
+                self._queue.put_nowait(audio)
+            except queue.Full:
+                pass
+
+    def _loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                audio = self._queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            text = self.stt.transcribe(audio)
+            if self.on_transcript is not None:
+                self.on_transcript(text)
+            clean = strip_wake_phrase(text)
+            if not clean:
+                continue  # wake-only / empty: no action
+            intent = classify(clean)
+            if self.tts is not None and intent.response:
+                self.tts.say(intent.response)
+            if self.on_intent is not None:
+                self.on_intent(intent)
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+
+
 class VoiceLoop:
-    """Frame-driven voice turn state machine."""
+    """Frame-driven listener state machine."""
 
     def __init__(
         self,
@@ -43,6 +178,7 @@ class VoiceLoop:
         flush: Callable[[], None] | None = None,
         max_turn_s: float = 8.0,
         on_false_wake: Callable[[], None] | None = None,
+        worker: ThreadedWorker | None = None,
     ):
         self.wakeword = wakeword
         self.segmenter = segmenter
@@ -54,6 +190,7 @@ class VoiceLoop:
         self.flush = flush
         self.max_turn_s = float(max_turn_s)
         self.on_false_wake = on_false_wake
+        self.worker = worker
         self.false_wakes = 0
         self.state = LISTENING
         self._turn_deadline = 0.0
@@ -82,12 +219,7 @@ class VoiceLoop:
         self._flush()
 
     def _resume_listening(self) -> None:
-        """Return to idle: clear VAD + wake state and drop buffered audio.
-
-        Resetting the wake model matters: its streaming context still holds the
-        wake word, so without it the detector re-fires the instant listening
-        resumes (no fresh chime, looks "stuck").
-        """
+        """Return to idle: clear VAD + wake state and drop buffered audio."""
         self.state = LISTENING
         self.segmenter.reset()
         reset = getattr(self.wakeword, "reset", None)
@@ -108,7 +240,7 @@ class VoiceLoop:
         return intent
 
     def process_frame(self, frame: np.ndarray) -> Intent | None:
-        """Feed one 80 ms int16 frame; return an Intent when a command completes."""
+        """Feed one 80 ms int16 frame; return an Intent (inline) or None (worker)."""
         if self.state == LISTENING:
             if self.wakeword.process(frame):
                 self._begin_turn()
@@ -116,10 +248,12 @@ class VoiceLoop:
 
         event = self.segmenter.process(frame)
         if event == "end":
-            clean = strip_wake_phrase(self._transcribe(self.segmenter.audio()))
-            if not clean and time.monotonic() < self._turn_deadline:
-                self._listen_again()  # the wake word only; wait for the command
+            audio = self.segmenter.audio()
+            if self.worker is not None:
+                self.worker.submit(audio, self._turn_deadline)
+                self._resume_listening()
                 return None
+            clean = strip_wake_phrase(self._transcribe(audio))
             if not clean:
                 if time.monotonic() < self._turn_deadline:
                     self._listen_again()  # the wake word only; wait for the command

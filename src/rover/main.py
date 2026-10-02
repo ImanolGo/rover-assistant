@@ -65,6 +65,8 @@ class App:
         self.last_intent: Intent | None = None
         self.voice_error: str | None = None
         self._voice_loop: Any = None
+        self._voice_pump: Any = None
+        self._voice_worker: Any = None
         self._lock = threading.Lock()
         self._snapshot = VideoSnapshot(state=self.state)
         self._stop = threading.Event()
@@ -124,7 +126,7 @@ class App:
     def _voice_loop(self) -> None:
         try:
             from rover.hal.audio import AlsaCapture, AlsaSpeaker
-            from rover.voice.pipeline import VoiceLoop
+            from rover.voice.pipeline import AudioQueue, CapturePump, ThreadedWorker, VoiceLoop
             from rover.voice.stt import GemmaStt
             from rover.voice.tts import PiperTts
             from rover.voice.vad import SpeechSegmenter, load_silero
@@ -133,6 +135,8 @@ class App:
             voice = self.config.voice
             capture = AlsaCapture(self.config.audio)
             speaker = AlsaSpeaker(self.config.audio)
+            frames = AudioQueue(maxsize=25)
+            pump = CapturePump(capture, frames)
             wakeword = make_wakeword(voice.wakeword_model, threshold=voice.wakeword_threshold)
             segmenter = SpeechSegmenter(
                 load_silero(end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold),
@@ -141,6 +145,9 @@ class App:
             )
             stt = GemmaStt(self.config.planner.url)
             tts = PiperTts(voice.tts_voice, speaker)
+            worker = ThreadedWorker(
+                stt, tts=tts, on_intent=self._on_intent, on_transcript=self._on_transcript
+            )
             loop = VoiceLoop(
                 wakeword,
                 segmenter,
@@ -148,21 +155,24 @@ class App:
                 tts=tts,
                 speaker=speaker,
                 wake_sound=voice.wake_sound,
-                on_transcript=self._on_transcript,
-                flush=capture.flush,
+                flush=lambda: (capture.flush(), frames.drain()),
                 max_turn_s=voice.max_turn_s,
                 on_false_wake=lambda: print("voice: false wake (no speech)"),
+                worker=worker,
             )
             self._voice_loop = loop
+            self._voice_pump = pump
+            self._voice_worker = worker
+            worker.start()
+            pump.start()
             print("voice: listening for 'Hey Rover'")
             while not self._stop.is_set():
-                frame = capture.read_frame()
+                frame = frames.get(timeout=0.5)
                 if frame is None:
-                    time.sleep(0.01)
                     continue
-                intent = loop.process_frame(frame)
-                if intent is not None:
-                    self._on_intent(intent)
+                loop.process_frame(frame)
+            pump.stop()
+            worker.close()
             capture.close()
             tts.close()
             stt.close()
@@ -201,6 +211,10 @@ class App:
             "target": self.last_intent.target if self.last_intent else None,
             "voice_error": self.voice_error,
             "false_wakes": getattr(self._voice_loop, "false_wakes", 0),
+            "frames_dropped": (
+                getattr(getattr(self._voice_pump, "queue", None), "dropped", 0)
+                + getattr(self._voice_worker, "dropped", 0)
+            ),
             "camera_backend": self.config.camera.backend,
             "sim": self.config.sim,
             "frames": self._frames,

@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import time
 import wave
 
 import numpy as np
 
 from rover.hal.audio import NullSpeaker
-from rover.voice.pipeline import LISTENING, RECORDING, VoiceLoop
+from rover.voice.pipeline import (
+    LISTENING,
+    RECORDING,
+    AudioQueue,
+    CapturePump,
+    ThreadedWorker,
+    VoiceLoop,
+)
 from rover.voice.stt import FakeStt
 from rover.voice.tts import FakeTts
 from rover.voice.vad import FakeVad, SpeechSegmenter
@@ -169,3 +177,70 @@ def test_transcript_callback_receives_text():
     intent = _drive_to_intent(loop)
     assert intent is not None and intent.name == "stop"
     assert seen == ["stop"]
+
+
+# --- C1: bounded queue + capture pump + threaded worker ----------------------
+
+
+class _FakeCapture:
+    def __init__(self, count: int):
+        self.count = count
+        self.index = 0
+
+    def read_frame(self):
+        if self.index >= self.count:
+            time.sleep(0.005)
+            return None
+        self.index += 1
+        return np.full(1280, self.index, dtype=np.int16)
+
+
+def test_audio_queue_drops_the_oldest_and_counts():
+    q = AudioQueue(maxsize=2)
+    for value in range(5):
+        q.put(np.full(1280, value, dtype=np.int16))
+    assert q.qsize() == 2
+    assert q.dropped == 3
+    q.get()
+    assert int(q.get()[0]) == 4  # the newest frame survived
+
+
+def test_capture_pump_keeps_queue_bounded():
+    q = AudioQueue(maxsize=3)
+    pump = CapturePump(_FakeCapture(50), q)
+    pump.start()
+    time.sleep(0.1)
+    pump.stop()
+    assert q.qsize() <= 3
+    assert q.dropped > 0
+
+
+def test_threaded_worker_holds_at_most_one_pending_turn():
+    class SlowStt:
+        def transcribe(self, pcm, sample_rate: int = 16000) -> str:
+            time.sleep(0.3)
+            return "stop"
+
+    worker = ThreadedWorker(SlowStt(), on_intent=lambda _intent: None)
+    worker.start()
+    for _ in range(6):
+        worker.submit(np.ones(1280, dtype=np.int16))
+    worker.close()
+    assert worker.dropped >= 3
+
+
+class _SpyWorker:
+    def __init__(self):
+        self.submitted = []
+
+    def submit(self, audio, deadline=None) -> None:
+        self.submitted.append(audio)
+
+
+def test_worker_path_hands_the_turn_off_and_resumes_listening():
+    worker = _SpyWorker()
+    loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), FakeStt("x"), worker=worker)
+    loop.process_frame(ZERO)  # wake -> open turn
+    assert _drive_to_intent(loop) is None  # the listener does not run STT
+    assert len(worker.submitted) == 1
+    assert loop.state == LISTENING
