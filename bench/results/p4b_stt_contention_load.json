@@ -1,0 +1,16 @@
+{
+  "name": "p4b_stt_contention_load",
+  "date": "2026-10-02T10:09:50",
+  "commit": "e96f7f4",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "duration_s": 110.0,
+  "vision_ok": 0,
+  "vision_fail": 863,
+  "vision_p50_s": null,
+  "yolo_fps_median": 26.6,
+  "min_mem_available_mb": 4683.4,
+  "swap_growth_mb": 0.0,
+  "csv": "bench/results/raw/stt_contention_mem.csv",
+  "tegrastats_log": "bench/results/raw/stt_contention_tegrastats.log"
+}
