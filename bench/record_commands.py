@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
 import time
 import wave
 from pathlib import Path
@@ -87,11 +88,25 @@ def write_wav(path: Path, clip: np.ndarray, rate: int) -> None:
 
 
 def record_take(capture: AlsaCapture, rover, seconds: float, speed: float) -> np.ndarray:
+    # Keep refreshing the command: the rover writer zeroes the wheels after 0.5 s
+    # with no fresh command, so a single drive() would only twitch.
+    stop = threading.Event()
+    spinner = None
     if rover is not None:
-        rover.drive(-speed, speed)  # spin in place (wheels up)
+
+        def _spin() -> None:
+            while not stop.is_set():
+                rover.drive(-speed, speed)  # spin in place (wheels up)
+                time.sleep(0.1)
+
+        spinner = threading.Thread(target=_spin, daemon=True)
+        spinner.start()
     try:
         return record(capture, seconds)
     finally:
+        stop.set()
+        if spinner is not None:
+            spinner.join(timeout=0.5)
         if rover is not None:
             rover.stop()
 
