@@ -26,16 +26,26 @@ COLORS = (
     "grey",
 )
 
+# The single source of truth for the safety stop, shared by the API and voice.
+STOP_RE = re.compile(r"\b(stop|halt|freeze|emergency|abort|cancel)\b", re.I)
+
+
+def is_stop(text: str) -> bool:
+    """True if ``text`` (minus any wake phrase) contains a stop word."""
+    return bool(STOP_RE.search(strip_wake_phrase(text)))
+
+
 # (name, response) after the trigger phrase. Ported from legacy command_router.
 _SIMPLE: list[tuple[re.Pattern[str], str, str | None]] = [
-    (re.compile(r"\b(stop|halt|freeze|emergency|abort|cancel)\b", re.I), "stop", "Stopping."),
+    (STOP_RE, "stop", "Stopping."),
     (
         re.compile(r"\b(go\s+forward|move\s+forward|advance)\b", re.I),
         "forward",
         "Moving forward.",
     ),
+    # "go back to X" is a destination (go_to), not a reverse; block the "to" case.
     (
-        re.compile(r"\b(go\s+back|move\s+back|reverse|back\s+up)\b", re.I),
+        re.compile(r"\b(go\s+back|move\s+back|reverse|back\s+up)\b(?!\s+to\b)", re.I),
         "backward",
         "Moving backward.",
     ),
@@ -50,7 +60,7 @@ _SIMPLE: list[tuple[re.Pattern[str], str, str | None]] = [
     ),
 ]
 
-_FOLLOW = re.compile(r"\bfollow\s+me\b|\bcome\s+along\s+with\s+me\b|\bfollow\b", re.I)
+_FOLLOW = re.compile(r"\bfollow\b(?:\s+(?P<rest>.+))?|\bcome\s+along\s+with\s+me\b", re.I)
 _DESCRIBE = re.compile(
     r"\b(what\s+do\s+you\s+see|what\s+can\s+you\s+see|describe|look\s+around"
     r"|what\s+is\s+in\s+front\s+of\s+you)\b",
@@ -58,7 +68,9 @@ _DESCRIBE = re.compile(
 )
 _IS_THERE = re.compile(r"\bis\s+there\s+(?P<rest>.+)", re.I)
 _GO_TO = re.compile(
-    r"\b(?:go\s+to|go\s+find|find|look\s+for|fetch|bring\s+me|get\s+me)\s+(?P<rest>.+)", re.I
+    r"\b(?:go\s+back\s+to|go\s+to|go\s+find|find|look\s+for|fetch|bring\s+me|get\s+me)\s+"
+    r"(?P<rest>.+)",
+    re.I,
 )
 
 _ARTICLE = re.compile(r"^(?:the|a|an|my|your|his|her|their)\s+", re.I)
@@ -90,9 +102,14 @@ class Intent:
     slots: dict[str, str] = field(default_factory=dict)
 
 
+def _clean_phrase(rest: str) -> str:
+    """Drop a leading article and punctuation: 'the red ball' -> 'red ball'."""
+    return _ARTICLE.sub("", rest.strip()).strip().rstrip(".!?").lower()
+
+
 def _split_target(rest: str) -> tuple[str, tuple[str, ...]]:
     """Turn 'the red cup' into ('cup', ('red',)): drop articles, pull out colours."""
-    cleaned = _ARTICLE.sub("", rest.strip()).strip().rstrip(".!?").lower()
+    cleaned = _clean_phrase(rest)
     words = _WORD.findall(cleaned)
     if not words:
         return "", ()
@@ -121,7 +138,15 @@ def classify(text: str) -> Intent:
     if _DESCRIBE.search(lowered):
         return Intent(name="describe", raw=raw)
 
-    if _FOLLOW.search(lowered):
+    if match := _FOLLOW.search(lowered):
+        rest = (match.group("rest") or "").strip()
+        if rest and rest not in ("me", "us"):
+            return Intent(
+                name="follow",
+                target=_clean_phrase(rest),
+                attributes=_split_target(rest)[1],
+                raw=raw,
+            )
         return Intent(name="follow", raw=raw)
 
     if match := _GO_TO.search(lowered):

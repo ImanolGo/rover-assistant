@@ -123,6 +123,17 @@ def test_voice_go_to_intent_sets_state_and_status():
         app.close()
 
 
+def test_api_stop_words_use_the_shared_intent_table():
+    app = App(_sim_config(), detector=FakeDetector())
+    try:
+        app.rover.drive(0.1, 0.1)
+        assert app.submit_command("cancel") is True
+        assert app.state == "STOPPED"
+        assert app.rover.last_command == (0.0, 0.0)
+    finally:
+        app.close()
+
+
 def test_empty_command_is_rejected():
     app = App(_sim_config(), detector=FakeDetector())
     try:

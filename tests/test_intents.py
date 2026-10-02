@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rover.voice.intents import Intent, classify, strip_wake_phrase
+from rover.voice.intents import Intent, classify, is_stop, strip_wake_phrase
 
 
 @pytest.mark.parametrize(
@@ -87,6 +87,34 @@ def test_classify_handles_command_with_wake_phrase_in_one_breath():
     assert classify("Hey Rover, go to the red cup").name == "go_to"
     assert classify("Hey Rover, stop").name == "stop"
     assert classify("Hey Rover").name == "unknown"
+
+
+def test_go_back_to_is_a_destination_not_a_reverse():
+    go_to = classify("go back to the kitchen")
+    assert go_to.name == "go_to"
+    assert go_to.target == "kitchen"
+    assert classify("go back").name == "backward"
+
+
+def test_follow_can_carry_a_target():
+    targeted = classify("follow the red ball")
+    assert targeted.name == "follow"
+    assert targeted.target == "red ball"
+    assert targeted.attributes == ("red",)
+    bare = classify("follow me")
+    assert bare.name == "follow"
+    assert bare.target is None
+
+
+def test_dont_stop_is_a_safe_stop():
+    # Negation is not parsed; stopping is the safe failure.
+    assert classify("don't stop").name == "stop"
+
+
+def test_is_stop_shares_one_pattern():
+    assert is_stop("cancel now")
+    assert is_stop("Hey Rover, abort")
+    assert not is_stop("go forward")
 
 
 def test_intent_is_a_dataclass_with_raw_text():

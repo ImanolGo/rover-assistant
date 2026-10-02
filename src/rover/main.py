@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import re
 import signal
 import threading
 import time
@@ -24,9 +23,7 @@ from rover.hal.camera import FrameSource, open_camera
 from rover.hal.rover import Rover, open_rover
 from rover.perception.detector import Detector, make_detector
 from rover.perception.geometry import CameraGeometry
-from rover.voice.intents import Intent
-
-_STOP_RE = re.compile(r"\b(stop|halt|freeze)\b", re.IGNORECASE)
+from rover.voice.intents import Intent, classify
 
 
 def select_source(config: RobotConfig) -> None:
@@ -219,7 +216,7 @@ class App:
         if not text:
             return False
         self.last_command = text
-        if _STOP_RE.search(text):
+        if classify(text).name == "stop":
             self.stop()
             return True
         self.state = "COMMAND"
