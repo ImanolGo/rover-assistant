@@ -63,6 +63,13 @@ watchdog, and the brain owns exactly one CUDA context.
 
 GPU-bound calls run in an executor thread; the 10 Hz tick never awaits Gemma.
 
+**Voice threads (2026-10-02):** a capture thread fills a bounded frame queue
+(drop-oldest, counted); a listener thread runs the wake word + VAD on every
+frame and never blocks; a worker thread does STT → intent → TTS. This keeps the
+mic drained and the next wake word live while the robot talks or thinks.
+Barge-in / stop-without-wake is deferred (C3); PipeWire `module-echo-cancel`
+would be the future option for true barge-in. See STATUS §Phase 4 voice v3.
+
 ## 4. Behaviours
 
 ### Missions (from planner tool calls or regex intents)
@@ -155,8 +162,8 @@ rover-assistant/
 │   ├── config.py                   # load robot.yaml into dataclasses (no framework)
 │   ├── hal/        camera.py audio.py rover.py
 │   ├── perception/ detector.py geometry.py color.py
-│   ├── voice/      wakeword.py vad.py stt.py tts.py
-│   ├── brain/      intents.py planner.py skills.py selector.py verify.py mission.py state.py
+│   ├── voice/      wakeword.py vad.py stt.py tts.py intents.py pipeline.py
+│   ├── brain/      planner.py skills.py selector.py verify.py mission.py state.py
 │   ├── api/        server.py dashboard.html
 │   └── telemetry/  decisions.py memprobe.py
 ├── bench/          common.py bench_*.py record_commands.py soak.py report.py data/ results/

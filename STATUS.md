@@ -163,6 +163,29 @@ Recorded: `bench/results/p4b_stt_moonshine.json`. Models downloaded by
 `scripts/download_models.sh` (tiny/small/medium streaming-en, `.ort`), hashed in
 `models/MODELS.md`; package pinned as the `moonshine` extra (`moonshine-voice==0.1.5`).
 
+### Phase 4 voice v3 — pipeline rework (2026-10-02, commits a5246e6..d73a822)
+
+**C1** capture thread → bounded `AudioQueue` (25 frames, drop-oldest, counted) →
+listener (wake + VAD) → `ThreadedWorker` (STT → intent → TTS); the listener never
+blocks on STT/TTS, and `/status` exposes `frames_dropped`. **C4** in-process
+Piper (load once; rate from the model config; ~80 ms block writes with a cancel
+flag checked between blocks; no subprocess, no idle-timeout dead air).
+**C5** `speex_noise_suppression` and `wakeword_vad_threshold` now reach
+openWakeWord's `Model(...)`; the turn audio is flushed after the notify chime so
+it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
+
+**Measurements still owed — blocked (Known issue 12):**
+- Moonshine tiny full-stack `MemAvailable` delta on a healthy run: **not
+  obtained.** Two attempts had llama-server's mmproj path fail (`vision_ok 0 /
+  vision_fail 1193`, `cudaMalloc failed: out of memory` + NvMap error 12) and the
+  camera/YOLO fail to start; `drop_caches` did not recover it. The contention
+  latency table in §Phase 4 voice v2 is from **run 1** (the run whose Gemma
+  baseline returned responses), not the 863-error run.
+- Moonshine small at 2/4 intra-op threads: the Python API does not expose the
+  thread count (C options only), so no sweep is possible.
+- 30-min soak (criterion b) and real-mic recordings (B1): pending.
+- `bench_wake.py` motor-noise before/after: pending motor-noise audio.
+
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
 |---|---|---|---|---|---|---|
@@ -303,3 +326,4 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 9. The laptop `.venv` runs `pytest`/`ruff` directly, but `uv run`/`uv sync` on x86_64 fail: `tool.uv.sources` pins `torch` to the Jetson cu126 index (aarch64/cp310 wheels only). **Do not** relax that pin — PyPI now ships aarch64 torch wheels (cu130) that the JP6 driver rejects (Known issue 3). The source-marker fallback was tried and collapses to PyPI on this uv version, so the pin stays. Use `.venv/bin/pytest` locally; keep `uv run` for the Jetson. (Laptop sim in Phase 3 must therefore use `.venv/bin/rover`, not `uv run rover`.)
 10. Voice turns start capturing at wake detection, so saying "Hey Rover" and then pausing yields an extra `unknown` turn (the wake word itself). Harmless — no action is taken — but a pre-roll trim is a later refinement.
 11. Tiny one-word utterances ("halt", "go home") are occasionally mis-transcribed by Gemma audio ("Holt", "Gohon") and fall through to `unknown`; the regex table itself matches them. Longer phrasing is robust (90% on the 20-command bench).
+12. On some boots llama-server loads and answers `/health`, but the mmproj/vision path then fails (`cudaMalloc failed: out of memory`, NvMap error 12) and the server dies; `drop_caches` did **not** recover it this session — a reboot was required. This blocked the B3 contention/memory measurements. `scripts/llama_up.sh` retries and is the start of `doctor.sh`; the durable fix (or a reboot step) belongs in Phase 7.
