@@ -269,11 +269,10 @@ def main() -> int:
             print(f"=== dataset: {name} ({len(rows)} commands) ===", flush=True)
             results["datasets"][name] = {}
             for candidate in args.candidates:
-                run = run_moonshine if candidate.startswith("moonshine") else run_gemma
                 if candidate.startswith("moonshine"):
-                    summary = run(candidate, rows, args.pace, contention)
+                    summary = run_moonshine(candidate, rows, args.pace, contention)
                 else:
-                    summary = run(candidate, rows, contention)
+                    summary = run_gemma(rows, contention)
                 results["datasets"][name][candidate] = summary
                 print(
                     f"  {candidate:16s} acc={summary['accuracy']:.2f} "
