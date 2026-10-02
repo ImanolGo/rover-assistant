@@ -110,7 +110,9 @@ def main() -> int:
     out_dir = Path("bench/results/raw/voice")
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    stem = Path("/tmp/opencode/voice_bench_tmp")
+    scratch = Path("bench/results/raw/voice")
+    scratch.mkdir(parents=True, exist_ok=True)
+    stem = scratch / "voice_bench_tmp"
     segmenter = SpeechSegmenter(load_silero(end_silence_ms=800), max_utterance_s=10.0)
     stt = GemmaStt(URL)
 

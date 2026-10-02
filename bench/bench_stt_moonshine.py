@@ -73,7 +73,9 @@ def _resample16k(path: str) -> np.ndarray:
 
 def synth_dataset() -> list[tuple[str, np.ndarray, str, str | None]]:
     out = []
-    tmp = Path("/tmp/opencode/bench_stt_tmp.wav")
+    scratch = Path("bench/results/raw/voice")
+    scratch.mkdir(parents=True, exist_ok=True)
+    tmp = scratch / "stt_tmp.wav"
     for text, intent, target in SYNTH_COMMANDS:
         out.append((text, synthesize(text, tmp), intent, target))
     return out
