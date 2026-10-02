@@ -132,35 +132,39 @@ real-mic set from `bench/record_commands.py` is still pending a human run):
 
 ² Gemma's weights live in llama-server, not the brain process; its RSS is shared.
 
-**Contention** (`bench/contention_load.py`: camera + YOLO 26.6 fps + a continuous
-Gemma vision loop; `--limit 6` synthesized commands, **run 1** — the healthy run,
-0 vision errors in its loader):
+**Contention** (`--limit 6` synthesized commands; camera + YOLO + a Gemma vision
+loop). Run 1 was on the old boot; the healthy re-run is the one to use:
 
 | Candidate | idle p90 | contention p50 | contention p90 |
 |---|---|---|---|
-| Gemma audio | 0.44 s | 1.24 s | **1.34 s** |
-| Moonshine tiny | 0.18 s | 0.40 s | **0.49 s** |
-| Moonshine small | 0.33 s | 0.80 s | **0.88 s** |
+| Gemma audio | 0.44 s | 1.29 s | **1.58 s** |
+| Moonshine tiny | 0.18 s | 0.22 s | **0.28 s** ✅ |
+| Moonshine small | 0.33 s | 0.39 s | **0.52 s** ✅ |
 
-Under load Gemma STT exceeds 600 ms (1.34 s) because it shares llama-server's
-single slot with vision; Moonshine tiny passes (0.49 s), small does not (0.88 s).
+Healthy re-run 2026-10-02 11:16 (`bench/results/p4b_vision_load.json`):
+**vision_ok 132 / fail 0**. Gemma STT fails the 600 ms bar (1.58 s, sharing
+llama-server's single slot with vision); both Moonshine models pass.
 
-**Revised gate criterion (2026-10-02):** the old "MemAvailable ≥ G1 floor
-(574 MB)" was wrong — *any* addition fails it. Replaced with:
-**(a) full-stack MemAvailable ≥ 350 MB, and (b) a 30-min soak with zero new
-NvMap/vision errors.** Both are **unmeasured** (Moonshine tiny's memory delta on a
-healthy full stack, and the soak).
+**Memory criterion (revised) — measured.** 30-min soaks on the healthy stack
+(`bench/soak.py`: app = camera + YOLO + voice idle, one vision query / 15 s):
 
-**GATE B3 — DEFERRED — blocked on memory, pending measurement. Keep Gemma.**
-Moonshine tiny matches Gemma accuracy, uses no GPU and is 2.7× faster under
-load; small fails the contention p90. We have not yet measured tiny's
-full-stack MemAvailable delta on a healthy run, nor run the 30-min soak, so the
-revised criterion is not decided. Moonshine stays a candidate; the real-mic set
-(B1) is the deciding accuracy test for tiny. Recorded:
-`bench/results/p4b_stt_contention_load.json`, `p4b_stt_moonshine.json`.
+| Stack | vision | MemAvailable min / p5 | swap | new errors |
+|---|---|---|---|---|
+| baseline (Gemma STT) | 120 / 0 | **919.8 / 921.7 MB** | +23.8 MB | 0 |
+| + Moonshine tiny resident | 120 / 0 | **728.8 / 730.5 MB** | +0 MB | 0 |
 
-Recorded: `bench/results/p4b_stt_moonshine.json`. Models downloaded by
-`scripts/download_models.sh` (tiny/small/medium streaming-en, `.ort`), hashed in
+Tiny's full-stack delta is **191 MB**. Both ≥ 350 MB ✅ and both soaks have
+**zero new NvMap/vision errors** ✅. (The clean floor is ~920 MB, not the old
+~574 MB — that was depressed by dev processes; see the Decision Log.)
+
+**GATE B3 — PASSES for Moonshine tiny on the synthesized set.** Accuracy 0.90 =
+Gemma's 0.90, no GPU, idle p90 0.18 s, contention p90 0.28 s, +191 MB, 30-min
+soak clean. **Integration is deferred to C6 (held by the operator)**, so the
+runtime backend stays **Gemma** for now. The **real-mic set (B1)** is the deciding
+accuracy confirmation for tiny; revert to Gemma if it regresses. Recorded:
+`bench/results/p4b_stt_moonshine.json`, `p4b_vision_load.json`,
+`p6_soak_baseline.json`, `p6_soak_tiny.json`. Models are fetched by
+`scripts/download_models.sh` (tiny/small/medium streaming-en `.ort`), hashed in
 `models/MODELS.md`; package pinned as the `moonshine` extra (`moonshine-voice==0.1.5`).
 
 ### Phase 4 voice v3 — pipeline rework (2026-10-02, commits a5246e6..d73a822)
@@ -317,6 +321,8 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-01 | STT confirmed live: **Gemma audio** via llama-server | 20 synthesized commands → 18/20 intents, p50 0.56 s; live "go to the blue bottle" / "what do you see" correct | `bench/bench_voice.py`, `hardware_tests/test_voice.py` |
 | 2026-10-02 | **Change the B3 gate criterion**: replace "MemAvailable ≥ G1 floor (574 MB)" with "≥ 350 MB **and** a 30-min soak with zero new NvMap/vision errors" | the old floor is failed by any addition, so it cannot discriminate; 350 MB + a soak keeps the real risk (NvMap exhaustion / instability) while allowing a small STT | rationale only; both unmeasured |
 | 2026-10-02 | B3 STT gate **DEFERRED — blocked on memory, pending measurement** → keep Gemma; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB vs Gemma 0.90/0.44 s. Healthy contention (run 1): Gemma p90 **1.34 s** vs tiny **0.49 s**, small 0.88 s. Tiny's full-stack MemAvailable delta and the 30-min soak are unmeasured; real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
+| 2026-10-02 | **The clean memory floor is ~920 MB, not ~574 MB.** Baseline 30-min soak: MemAvailable min 919.8 (p5 921.7), 0 errors | the old 574 MB figure came from a boot where **ollama + jtop pinned `CmaFree` at 1.8 MB**, which is what actually caused the NvMap/cudaMalloc failures — not the stack. Stopping them (`llama_up.sh` now does) restores ~220 MB CMA and llama loads first try | `p6_soak_baseline.json`, `p6_soak_tiny.json` |
+| 2026-10-02 | **B3 gate PASSES for Moonshine tiny** (synthesized set); integration deferred to C6 (held) | tiny: acc 0.90 = Gemma, idle p90 0.18 s, healthy contention p90 0.28 s, +191 MB (soak floor 728.8 ≥ 350), 30-min soak vision 120/0 and 0 new NvMap errors; no GPU. Real-mic set is the deciding confirmation; revert to Gemma if it regresses | `p4b_vision_load.json`, `p6_soak_tiny.json`, `p4b_stt_moonshine.json` |
 | 2026-10-02 | Deletion pass: drop `voice.whisper_model` (dead) and the unused `sounddevice` dependency | whisper was dropped from the runtime in Phase 1; nothing imports sounddevice (audio uses arecord/aplay) | grep over src/tests; 146 tests pass |
 | 2026-10-02 | **src/ budget revised `< 3,000` → `< 3,500` lines** for v1 | the voice v2/v3 work (threaded capture/listener/worker, in-process Piper, continuation, intents) is required functionality and the original target predates it; current count **3,274**. The `< 3,000` target still describes the original design scope; a deletion pass runs each phase, and `docs/torch_removal.md` will change the count (+~350–450 when scoped) | `find src -name '*.py' | xargs cat | wc -l` |
 
@@ -332,4 +338,4 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 9. The laptop `.venv` runs `pytest`/`ruff` directly, but `uv run`/`uv sync` on x86_64 fail: `tool.uv.sources` pins `torch` to the Jetson cu126 index (aarch64/cp310 wheels only). **Do not** relax that pin — PyPI now ships aarch64 torch wheels (cu130) that the JP6 driver rejects (Known issue 3). The source-marker fallback was tried and collapses to PyPI on this uv version, so the pin stays. Use `.venv/bin/pytest` locally; keep `uv run` for the Jetson. (Laptop sim in Phase 3 must therefore use `.venv/bin/rover`, not `uv run rover`.)
 10. Voice turns start capturing at wake detection, so saying "Hey Rover" and then pausing yields an extra `unknown` turn (the wake word itself). Harmless — no action is taken — but a pre-roll trim is a later refinement.
 11. Tiny one-word utterances ("halt", "go home") are occasionally mis-transcribed by Gemma audio ("Holt", "Gohon") and fall through to `unknown`; the regex table itself matches them. Longer phrasing is robust (90% on the 20-command bench).
-12. On some boots llama-server loads and answers `/health`, but the mmproj/vision path then fails (`cudaMalloc failed: out of memory`, NvMap error 12) and the server dies; `drop_caches` did **not** recover it this session — a reboot was required. This blocked the B3 contention/memory measurements. `scripts/llama_up.sh` retries and is the start of `doctor.sh`; the durable fix (or a reboot step) belongs in Phase 7.
+12. llama-server's mmproj/NvMap load fails (`cudaMalloc failed: out of memory`, NvMap error 12, `GGML_ASSERT(buffer)`) when **CMA is exhausted**. The cause on this image is **ollama + jtop pinning `CmaFree` at ~1.8 MB**; stopping them frees ~220 MB CMA and llama loads first try. `scripts/llama_up.sh` now stops ollama/jtop and retries; a reboot alone did **not** fix it (the holders autostart). Fold the ollama/jtop stop into `doctor.sh` (Phase 7).

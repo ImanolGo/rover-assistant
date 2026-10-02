@@ -1,7 +1,7 @@
 {
   "name": "p4b_stt_moonshine",
-  "date": "2026-10-02T09:30:00",
-  "commit": "14a09b5",
+  "date": "2026-10-02T11:15:10",
+  "commit": "1431996",
   "power_mode": "NV Power Mode: MAXN_SUPER 2",
   "clocks": "n/a",
   "contention": false,
@@ -12,12 +12,12 @@
         "commands": [
           {
             "said": "stop",
-            "transcript": "Top.",
+            "transcript": "Top Transcribe this audio exactly.",
             "intent": "unknown",
             "target": null,
             "ok": false,
             "wer": 1.0,
-            "latency_s": 0.449,
+            "latency_s": 0.842,
             "stop_partial_s": null
           },
           {
@@ -27,7 +27,7 @@
             "target": null,
             "ok": false,
             "wer": 1.0,
-            "latency_s": 0.311,
+            "latency_s": 1.289,
             "stop_partial_s": null
           },
           {
@@ -37,7 +37,7 @@
             "target": null,
             "ok": true,
             "wer": 0.5,
-            "latency_s": 0.324,
+            "latency_s": 1.58,
             "stop_partial_s": null
           },
           {
@@ -47,220 +47,7 @@
             "target": null,
             "ok": true,
             "wer": 0.33,
-            "latency_s": 0.378,
-            "stop_partial_s": null
-          },
-          {
-            "said": "reverse",
-            "transcript": "reverse",
-            "intent": "backward",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.235,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn left",
-            "transcript": "turn left",
-            "intent": "turn_left",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.282,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn right",
-            "transcript": "turn right",
-            "intent": "turn_right",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.293,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn around",
-            "transcript": "turn around",
-            "intent": "turn_around",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.277,
-            "stop_partial_s": null
-          },
-          {
-            "said": "come here",
-            "transcript": "Come here.",
-            "intent": "forward",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.328,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go home",
-            "transcript": "Go home.",
-            "intent": "return_home",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.32,
-            "stop_partial_s": null
-          },
-          {
-            "said": "what do you see",
-            "transcript": "what do you see",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.368,
-            "stop_partial_s": null
-          },
-          {
-            "said": "describe the scene",
-            "transcript": "Describe the scene.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.33,
-            "latency_s": 0.375,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look around",
-            "transcript": "look around",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.283,
-            "stop_partial_s": null
-          },
-          {
-            "said": "follow me",
-            "transcript": "follow",
-            "intent": "follow",
-            "target": null,
-            "ok": true,
-            "wer": 0.33,
-            "latency_s": 0.227,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a blue bus",
-            "transcript": "Is there a blue bus?",
-            "intent": "is_there",
-            "target": "bus",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.436,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a person",
-            "transcript": "Is there a person?",
-            "intent": "is_there",
-            "target": "person",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.405,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the red cup",
-            "transcript": "Go to the Red Cup.",
-            "intent": "go_to",
-            "target": "cup",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.438,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the blue bottle",
-            "transcript": "Go to the blue bottle.",
-            "intent": "go_to",
-            "target": "bottle",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.441,
-            "stop_partial_s": null
-          },
-          {
-            "said": "find my green backpack",
-            "transcript": "Find my green backpack.",
-            "intent": "go_to",
-            "target": "backpack",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.417,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look for the chair",
-            "transcript": "Look for the chair.",
-            "intent": "go_to",
-            "target": "chair",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.4,
-            "stop_partial_s": null
-          }
-        ],
-        "accuracy": 0.9,
-        "correct": 18,
-        "total": 20,
-        "wer_mean": 0.292,
-        "latency_p50_s": 0.348,
-        "latency_p90_s": 0.441,
-        "cpu_percent": 1.3,
-        "rss_mb": 49.7
-      },
-      "moonshine-tiny": {
-        "candidate": "moonshine-tiny",
-        "commands": [
-          {
-            "said": "stop",
-            "transcript": "Stop.",
-            "intent": "stop",
-            "target": null,
-            "ok": true,
-            "wer": 1.0,
-            "latency_s": 0.002,
-            "stop_partial_s": null
-          },
-          {
-            "said": "halt",
-            "transcript": "Holt,",
-            "intent": "unknown",
-            "target": null,
-            "ok": false,
-            "wer": 1.0,
-            "latency_s": 0.145,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go forward",
-            "transcript": "Go forward.",
-            "intent": "forward",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.131,
-            "stop_partial_s": null
-          },
-          {
-            "said": "move forward please",
-            "transcript": "Move forward please",
-            "intent": "forward",
-            "target": null,
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.148,
+            "latency_s": 1.42,
             "stop_partial_s": null
           },
           {
@@ -270,190 +57,50 @@
             "target": null,
             "ok": true,
             "wer": 0.0,
-            "latency_s": 0.146,
+            "latency_s": 1.235,
             "stop_partial_s": null
           },
           {
             "said": "turn left",
-            "transcript": "Turn left.",
+            "transcript": "turn left",
             "intent": "turn_left",
             "target": null,
             "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.141,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn right",
-            "transcript": "Turn right.",
-            "intent": "turn_right",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.14,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn around",
-            "transcript": "Turn around.",
-            "intent": "turn_around",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.141,
-            "stop_partial_s": null
-          },
-          {
-            "said": "come here",
-            "transcript": "Come here.",
-            "intent": "forward",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.127,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go home",
-            "transcript": "Go home.",
-            "intent": "return_home",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.142,
-            "stop_partial_s": null
-          },
-          {
-            "said": "what do you see",
-            "transcript": "What do you see?",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.003,
-            "stop_partial_s": null
-          },
-          {
-            "said": "describe the scene",
-            "transcript": "Describe the scene.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.33,
-            "latency_s": 0.069,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look around",
-            "transcript": "Look around.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.144,
-            "stop_partial_s": null
-          },
-          {
-            "said": "follow me",
-            "transcript": "Follow me.",
-            "intent": "follow",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.122,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a blue bus",
-            "transcript": "Is there a blue bus?",
-            "intent": "is_there",
-            "target": "bus",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.127,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a person",
-            "transcript": "Is there a person?",
-            "intent": "is_there",
-            "target": "person",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.003,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the red cup",
-            "transcript": "Go to the red cup.",
-            "intent": "go_to",
-            "target": "cup",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.08,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the blue bottle",
-            "transcript": "Go to the blue box.",
-            "intent": "go_to",
-            "target": "box",
-            "ok": false,
-            "wer": 0.2,
-            "latency_s": 0.03,
-            "stop_partial_s": null
-          },
-          {
-            "said": "find my green backpack",
-            "transcript": "Find my green backpack.",
-            "intent": "go_to",
-            "target": "backpack",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.181,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look for the chair",
-            "transcript": "Look for the chair.",
-            "intent": "go_to",
-            "target": "chair",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.19,
+            "wer": 0.0,
+            "latency_s": 1.298,
             "stop_partial_s": null
           }
         ],
-        "accuracy": 0.9,
-        "correct": 18,
-        "total": 20,
-        "wer_mean": 0.397,
-        "latency_p50_s": 0.136,
-        "latency_p90_s": 0.181,
-        "cpu_percent": 123.2,
-        "rss_mb": 154.2
+        "accuracy": 0.667,
+        "correct": 4,
+        "total": 6,
+        "wer_mean": 0.472,
+        "latency_p50_s": 1.293,
+        "latency_p90_s": 1.58,
+        "cpu_percent": 0.3,
+        "rss_mb": 45.5
       },
-      "moonshine-small": {
-        "candidate": "moonshine-small",
+      "moonshine-tiny": {
+        "candidate": "moonshine-tiny",
         "commands": [
           {
             "said": "stop",
-            "transcript": "Stop.",
-            "intent": "stop",
+            "transcript": "Top.",
+            "intent": "unknown",
             "target": null,
-            "ok": true,
+            "ok": false,
             "wer": 1.0,
-            "latency_s": 0.002,
+            "latency_s": 0.2,
             "stop_partial_s": null
           },
           {
             "said": "halt",
-            "transcript": "Halt!",
-            "intent": "stop",
+            "transcript": "Pulp.",
+            "intent": "unknown",
             "target": null,
-            "ok": true,
+            "ok": false,
             "wer": 1.0,
-            "latency_s": 0.249,
+            "latency_s": 0.184,
             "stop_partial_s": null
           },
           {
@@ -463,27 +110,27 @@
             "target": null,
             "ok": true,
             "wer": 0.5,
-            "latency_s": 0.286,
+            "latency_s": 0.257,
             "stop_partial_s": null
           },
           {
             "said": "move forward please",
-            "transcript": "Move forward, please.",
+            "transcript": "Move forward please.",
             "intent": "forward",
             "target": null,
             "ok": true,
-            "wer": 0.67,
-            "latency_s": 0.311,
+            "wer": 0.33,
+            "latency_s": 0.222,
             "stop_partial_s": null
           },
           {
             "said": "reverse",
-            "transcript": "Reverse!",
+            "transcript": "Reverse",
             "intent": "backward",
             "target": null,
             "ok": true,
-            "wer": 1.0,
-            "latency_s": 0.285,
+            "wer": 0.0,
+            "latency_s": 0.221,
             "stop_partial_s": null
           },
           {
@@ -493,200 +140,60 @@
             "target": null,
             "ok": true,
             "wer": 0.5,
-            "latency_s": 0.32,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn right",
-            "transcript": "Turn right.",
-            "intent": "turn_right",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.257,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn around",
-            "transcript": "Turn around.",
-            "intent": "turn_around",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.265,
-            "stop_partial_s": null
-          },
-          {
-            "said": "come here",
-            "transcript": "Come here.",
-            "intent": "forward",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.241,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go home",
-            "transcript": "Go home.",
-            "intent": "return_home",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.265,
-            "stop_partial_s": null
-          },
-          {
-            "said": "what do you see",
-            "transcript": "What do you see?",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.003,
-            "stop_partial_s": null
-          },
-          {
-            "said": "describe the scene",
-            "transcript": "Describe the scene.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.33,
-            "latency_s": 0.135,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look around",
-            "transcript": "Look around.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.308,
-            "stop_partial_s": null
-          },
-          {
-            "said": "follow me",
-            "transcript": "Follow me.",
-            "intent": "follow",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.256,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a blue bus",
-            "transcript": "Is there a blue bus?",
-            "intent": "is_there",
-            "target": "bus",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.256,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a person",
-            "transcript": "Is there a person?",
-            "intent": "is_there",
-            "target": "person",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.003,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the red cup",
-            "transcript": "Go to the red cup.",
-            "intent": "go_to",
-            "target": "cup",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.251,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the blue bottle",
-            "transcript": "Go to the blue box.",
-            "intent": "go_to",
-            "target": "box",
-            "ok": false,
-            "wer": 0.2,
-            "latency_s": 0.057,
-            "stop_partial_s": null
-          },
-          {
-            "said": "find my green backpack",
-            "transcript": "Find my green backpack.",
-            "intent": "go_to",
-            "target": "backpack",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.334,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look for the chair",
-            "transcript": "Look for the chair.",
-            "intent": "go_to",
-            "target": "chair",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.398,
+            "latency_s": 0.281,
             "stop_partial_s": null
           }
         ],
-        "accuracy": 0.95,
-        "correct": 19,
-        "total": 20,
-        "wer_mean": 0.48,
-        "latency_p50_s": 0.257,
-        "latency_p90_s": 0.334,
-        "cpu_percent": 179.6,
-        "rss_mb": 373.1
+        "accuracy": 0.667,
+        "correct": 4,
+        "total": 6,
+        "wer_mean": 0.555,
+        "latency_p50_s": 0.222,
+        "latency_p90_s": 0.281,
+        "cpu_percent": 120.4,
+        "rss_mb": 159.1
       },
-      "moonshine-medium": {
-        "candidate": "moonshine-medium",
+      "moonshine-small": {
+        "candidate": "moonshine-small",
         "commands": [
           {
             "said": "stop",
-            "transcript": "D.",
+            "transcript": "Top.",
             "intent": "unknown",
             "target": null,
             "ok": false,
             "wer": 1.0,
-            "latency_s": 0.002,
+            "latency_s": 0.337,
             "stop_partial_s": null
           },
           {
             "said": "halt",
-            "transcript": "Hold.",
+            "transcript": "Hole.",
             "intent": "unknown",
             "target": null,
             "ok": false,
             "wer": 1.0,
-            "latency_s": 0.367,
+            "latency_s": 0.355,
             "stop_partial_s": null
           },
           {
             "said": "go forward",
-            "transcript": "Go forward with",
+            "transcript": "Go forward.",
             "intent": "forward",
             "target": null,
             "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.409,
+            "wer": 0.5,
+            "latency_s": 0.517,
             "stop_partial_s": null
           },
           {
             "said": "move forward please",
-            "transcript": "Move forward please",
+            "transcript": "Move forward please.",
             "intent": "forward",
             "target": null,
             "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.3,
+            "wer": 0.33,
+            "latency_s": 0.44,
             "stop_partial_s": null
           },
           {
@@ -696,7 +203,7 @@
             "target": null,
             "ok": true,
             "wer": 1.0,
-            "latency_s": 0.474,
+            "latency_s": 0.377,
             "stop_partial_s": null
           },
           {
@@ -706,158 +213,18 @@
             "target": null,
             "ok": true,
             "wer": 0.5,
-            "latency_s": 0.443,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn right",
-            "transcript": "Turn right.",
-            "intent": "turn_right",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.428,
-            "stop_partial_s": null
-          },
-          {
-            "said": "turn around",
-            "transcript": "Turn around.",
-            "intent": "turn_around",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.454,
-            "stop_partial_s": null
-          },
-          {
-            "said": "come here",
-            "transcript": "Come here.",
-            "intent": "forward",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.413,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go home",
-            "transcript": "Go home.",
-            "intent": "return_home",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.39,
-            "stop_partial_s": null
-          },
-          {
-            "said": "what do you see",
-            "transcript": "What do you see?",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.003,
-            "stop_partial_s": null
-          },
-          {
-            "said": "describe the scene",
-            "transcript": "Describe the scene.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.33,
-            "latency_s": 0.201,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look around",
-            "transcript": "Look around them.",
-            "intent": "describe",
-            "target": null,
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.507,
-            "stop_partial_s": null
-          },
-          {
-            "said": "follow me",
-            "transcript": "Follow me.",
-            "intent": "follow",
-            "target": null,
-            "ok": true,
-            "wer": 0.5,
-            "latency_s": 0.408,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a blue bus",
-            "transcript": "Is there a blue bus?",
-            "intent": "is_there",
-            "target": "bus",
-            "ok": true,
-            "wer": 0.2,
-            "latency_s": 0.401,
-            "stop_partial_s": null
-          },
-          {
-            "said": "is there a person",
-            "transcript": "Is there a person?",
-            "intent": "is_there",
-            "target": "person",
-            "ok": true,
-            "wer": 0.25,
-            "latency_s": 0.003,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the red cup",
-            "transcript": "Go to the red cup",
-            "intent": "go_to",
-            "target": "cup",
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.345,
-            "stop_partial_s": null
-          },
-          {
-            "said": "go to the blue bottle",
-            "transcript": "Go to the blue button",
-            "intent": "go_to",
-            "target": "button",
-            "ok": false,
-            "wer": 0.2,
-            "latency_s": 0.086,
-            "stop_partial_s": null
-          },
-          {
-            "said": "find my green backpack",
-            "transcript": "Find my green backpack",
-            "intent": "go_to",
-            "target": "backpack",
-            "ok": true,
-            "wer": 0.0,
-            "latency_s": 0.446,
-            "stop_partial_s": null
-          },
-          {
-            "said": "look for the chair",
-            "transcript": "Look where the chair.",
-            "intent": "unknown",
-            "target": null,
-            "ok": false,
-            "wer": 0.5,
-            "latency_s": 0.55,
+            "latency_s": 0.412,
             "stop_partial_s": null
           }
         ],
-        "accuracy": 0.8,
-        "correct": 16,
-        "total": 20,
-        "wer_mean": 0.407,
-        "latency_p50_s": 0.404,
-        "latency_p90_s": 0.507,
-        "cpu_percent": 214.1,
-        "rss_mb": 592.3
+        "accuracy": 0.667,
+        "correct": 4,
+        "total": 6,
+        "wer_mean": 0.722,
+        "latency_p50_s": 0.394,
+        "latency_p90_s": 0.517,
+        "cpu_percent": 170.1,
+        "rss_mb": 361.3
       }
     }
   }

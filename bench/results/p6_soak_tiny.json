@@ -1,0 +1,21 @@
+{
+  "name": "p6_soak_tiny",
+  "date": "2026-10-02T11:48:02",
+  "commit": "1431996",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "minutes": 30.0,
+  "moonshine": "tiny",
+  "moonshine_resident": true,
+  "vision_ok": 120,
+  "vision_fail": 0,
+  "vision_p50_s": 1.22,
+  "vision_p90_s": 1.26,
+  "app_fps_p50": 36.2,
+  "app_fps_min": 24.9,
+  "mem_available_p5_mb": 730.5,
+  "min_mem_available_mb": 728.8,
+  "swap_growth_mb": 0.0,
+  "csv": "bench/results/raw/p6_soak_tiny_mem.csv",
+  "tegrastats_log": "bench/results/raw/p6_soak_tiny_tegrastats.log"
+}

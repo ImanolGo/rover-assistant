@@ -1,0 +1,19 @@
+{
+  "name": "p6_soak_baseline",
+  "date": "2026-10-02T11:10:08",
+  "commit": "5f0ad84",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "minutes": 30.0,
+  "vision_ok": 120,
+  "vision_fail": 0,
+  "vision_p50_s": 1.21,
+  "vision_p90_s": 1.25,
+  "app_fps_p50": 36.9,
+  "app_fps_min": 26.1,
+  "mem_available_p5_mb": 921.7,
+  "min_mem_available_mb": 919.8,
+  "swap_growth_mb": 23.8,
+  "csv": "bench/results/raw/p6_soak_baseline_mem.csv",
+  "tegrastats_log": "bench/results/raw/p6_soak_baseline_tegrastats.log"
+}
