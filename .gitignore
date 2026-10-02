@@ -2,6 +2,7 @@ models/
 *.engine
 *.gguf
 bench/results/raw/
+bench/data/commands/*.wav
 __pycache__/
 *.pyc
 .venv/
