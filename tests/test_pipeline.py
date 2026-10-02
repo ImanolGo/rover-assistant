@@ -12,6 +12,7 @@ from rover.voice.pipeline import (
     LISTENING,
     RECORDING,
     AudioQueue,
+    BargeInStop,
     CapturePump,
     ThreadedWorker,
     VoiceLoop,
@@ -189,6 +190,66 @@ def test_wake_chime_audio_is_flushed_before_capture(tmp_path):
     )
     loop.process_frame(ZERO)  # wake -> play chime -> flush buffered audio
     assert flushes, "the chime audio must be dropped before capturing the turn"
+
+
+class _FakeStream:
+    def __init__(self, text: str):
+        self._text = text
+        self.cancelled = False
+
+    def push(self, pcm, sample_rate: int = 16000) -> str:
+        return self._text
+
+    def partial(self) -> str:
+        return self._text
+
+    def final(self) -> str:
+        return self._text
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+
+def test_barge_in_stop_fires_without_a_wake_word():
+    stopped: list[int] = []
+    segmenter = SpeechSegmenter(FakeVad(start_after=0, end_after=None), max_utterance_s=100)
+    barge = BargeInStop(segmenter, lambda: _FakeStream("stop"), on_stop=lambda: stopped.append(1))
+    barge.process(ONE)
+    assert stopped == [1]
+
+
+def test_barge_in_ignores_stop_while_the_robot_speaks():
+    stopped: list[int] = []
+    segmenter = SpeechSegmenter(FakeVad(start_after=0, end_after=None), max_utterance_s=100)
+    barge = BargeInStop(
+        segmenter,
+        lambda: _FakeStream("stop"),
+        on_stop=lambda: stopped.append(1),
+        speaking=lambda: True,
+    )
+    barge.process(ONE)
+    assert stopped == []
+
+
+def test_voice_loop_moving_dispatches_to_barge_in_not_wake():
+    calls: list[str] = []
+
+    class _SpyBarge:
+        def process(self, frame) -> bool:
+            calls.append("barge")
+            return False
+
+        def reset(self) -> None: ...
+
+    loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), FakeStt("x"))
+    loop.barge = _SpyBarge()
+    loop.set_moving(True)
+    loop.process_frame(ONE)
+    assert calls == ["barge"]
+
+    loop.set_moving(False)
+    loop.process_frame(ZERO)  # wake path is back
+    assert loop.state == RECORDING
 
 
 def test_transcript_callback_receives_text():

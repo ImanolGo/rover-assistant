@@ -127,7 +127,13 @@ class App:
         try:
             from rover.hal.audio import AlsaCapture, AlsaSpeaker
             from rover.voice.intents import vocabulary
-            from rover.voice.pipeline import AudioQueue, CapturePump, ThreadedWorker, VoiceLoop
+            from rover.voice.pipeline import (
+                AudioQueue,
+                BargeInStop,
+                CapturePump,
+                ThreadedWorker,
+                VoiceLoop,
+            )
             from rover.voice.stt import make_stt
             from rover.voice.tts import PiperTts
             from rover.voice.vad import SpeechSegmenter, load_silero
@@ -168,7 +174,22 @@ class App:
                 worker=worker,
             )
             worker.on_empty = loop.arm_continuation
+            worker.on_speaking = loop.set_speaking
+            if getattr(stt, "supports_streaming", False):
+                loop.barge = BargeInStop(
+                    SpeechSegmenter(
+                        load_silero(
+                            end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold
+                        ),
+                        max_utterance_s=voice.max_utterance_s,
+                        onset_timeout_s=voice.no_speech_timeout_s,
+                    ),
+                    stt.new_stream,
+                    on_stop=self._on_barge_stop,
+                    speaking=lambda: loop.speaking,
+                )
             self._voice_loop = loop
+            loop.set_moving(self.state not in ("IDLE", "STOPPED"))
             self._voice_pump = pump
             self._voice_worker = worker
             worker.start()
@@ -192,13 +213,24 @@ class App:
         self.last_transcript = text
         print(f"voice: transcript={text!r}")
 
+    def _set_state(self, state: str) -> None:
+        """Update state and tell the listener whether barge-in stop applies."""
+        self.state = state
+        loop = self._voice_loop
+        if loop is not None:
+            loop.set_moving(state not in ("IDLE", "STOPPED"))
+
+    def _on_barge_stop(self) -> None:
+        print("voice: barge-in stop")
+        self.stop()
+
     def _on_intent(self, intent: Intent) -> None:
         self.last_intent = intent
         print(f"voice: intent={intent.name} target={intent.target} attrs={intent.attributes}")
         if intent.name == "stop":
             self.stop()
         else:
-            self.state = intent.name.upper()
+            self._set_state(intent.name.upper())
 
     # --- ApiContext ----------------------------------------------------------
 
@@ -241,12 +273,12 @@ class App:
         if classify(text).name == "stop":
             self.stop()
             return True
-        self.state = "COMMAND"
+        self._set_state("COMMAND")
         return True
 
     def stop(self) -> None:
         self.rover.stop()
-        self.state = "STOPPED"
+        self._set_state("STOPPED")
         self.left = self.right = 0.0
         with self._lock:
             self._snapshot = VideoSnapshot(

@@ -26,7 +26,7 @@ from typing import Any, Callable
 
 import numpy as np
 
-from rover.voice.intents import Intent, classify, strip_wake_phrase
+from rover.voice.intents import Intent, classify, is_stop, strip_wake_phrase
 from rover.voice.tts import play_wav
 
 LISTENING = "LISTENING"
@@ -112,12 +112,14 @@ class ThreadedWorker:
         on_intent: Callable[[Intent], None] | None = None,
         on_transcript: Callable[[str], None] | None = None,
         on_empty: Callable[[float], None] | None = None,
+        on_speaking: Callable[[bool], None] | None = None,
     ):
         self.stt = stt
         self.tts = tts
         self.on_intent = on_intent
         self.on_transcript = on_transcript
         self.on_empty = on_empty  # called with the deadline to keep the turn open
+        self.on_speaking = on_speaking  # suppress barge-in stop while the robot talks
         self._queue: queue.Queue = queue.Queue(maxsize=1)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -163,7 +165,13 @@ class ThreadedWorker:
                 continue
             intent = classify(clean)
             if self.tts is not None and intent.response:
-                self.tts.say(intent.response)
+                if self.on_speaking is not None:
+                    self.on_speaking(True)
+                try:
+                    self.tts.say(intent.response)
+                finally:
+                    if self.on_speaking is not None:
+                        self.on_speaking(False)
             if self.on_intent is not None:
                 self.on_intent(intent)
 
@@ -171,6 +179,59 @@ class ThreadedWorker:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+
+
+class BargeInStop:
+    """While the robot is moving: VAD-gated speech streamed to STT, stop on partials.
+
+    No wake word. Requires a streaming STT (Moonshine); when only a whole-turn
+    backend (Gemma) is available the caller leaves ``barge`` unset and stop falls
+    back to wake + full turn. ``speaking`` suppresses matching while TTS plays so
+    the robot cannot trigger itself.
+    """
+
+    def __init__(
+        self,
+        segmenter: Any,
+        stream_factory: Any,
+        on_stop: Callable[[], None],
+        speaking: Callable[[], bool] = lambda: False,
+    ):
+        self._segmenter = segmenter
+        self._stream_factory = stream_factory
+        self._on_stop = on_stop
+        self._speaking = speaking
+        self._stream: Any = None
+
+    def reset(self) -> None:
+        self._segmenter.reset()
+        if self._stream is not None:
+            self._stream.cancel()
+        self._stream = None
+
+    def _matched(self) -> bool:
+        if self._speaking():
+            return False
+        return is_stop(self._stream.partial() if self._stream else "")
+
+    def process(self, frame: np.ndarray) -> bool:
+        """Return True when a spoken stop was caught (``on_stop`` already called)."""
+        event = self._segmenter.process(frame)
+        if event == "start" and self._stream is None:
+            self._stream = self._stream_factory()
+        if self._stream is not None:
+            self._stream.push(frame)
+            if self._matched():
+                self._on_stop()
+                self.reset()
+                return True
+        if event == "end":
+            if self._stream is not None and not self._speaking() and is_stop(self._stream.final()):
+                self._on_stop()
+                self.reset()
+                return True
+            self.reset()
+        return False
 
 
 class VoiceLoop:
@@ -205,6 +266,19 @@ class VoiceLoop:
         self.state = LISTENING
         self._turn_deadline = 0.0
         self._armed_until: float | None = None
+        self.moving = False
+        self.speaking = False
+        self.barge: BargeInStop | None = None
+
+    def set_moving(self, moving: bool) -> None:
+        """Motion state changed: while moving, barge-in stop works without a wake word."""
+        self.moving = bool(moving)
+        if not self.moving and self.barge is not None:
+            self.barge.reset()
+
+    def set_speaking(self, speaking: bool) -> None:
+        """TTS started/stopped; suppress stop matching while the robot talks."""
+        self.speaking = bool(speaking)
 
     def arm_continuation(self, deadline: float) -> None:
         """Worker callback: keep the turn open for the command after a lone wake."""
@@ -283,6 +357,9 @@ class VoiceLoop:
     def process_frame(self, frame: np.ndarray) -> Intent | None:
         """Feed one 80 ms int16 frame; return an Intent (inline) or None (worker)."""
         if self.state == LISTENING:
+            if self.moving and self.barge is not None:
+                self.barge.process(frame)
+                return None
             if self._armed_until is not None:
                 if time.monotonic() >= self._armed_until:
                     self._armed_until = None

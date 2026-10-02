@@ -117,6 +117,13 @@ def test_is_stop_shares_one_pattern():
     assert not is_stop("go forward")
 
 
+def test_reply_templates_contain_no_stop_word():
+    from rover.voice.intents import STOP_RE, reply_templates
+
+    for template in reply_templates():
+        assert not STOP_RE.search(template), template
+
+
 def test_vocabulary_covers_verbs_colours_and_targets():
     vocab = vocabulary(["cup", "person"])
     assert {"stop", "go", "follow", "turn"} <= set(vocab)

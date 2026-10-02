@@ -163,6 +163,11 @@ def vocabulary(targets: Iterable[str] = ()) -> list[str]:
     return sorted(words)
 
 
+def reply_templates() -> list[str]:
+    """Every fixed reply the robot may speak (checked to contain no stop word)."""
+    return [response for _, _, response in _SIMPLE if response]
+
+
 def classify(text: str) -> Intent:
     """Classify a transcript. ``stop`` is matched first and bypasses everything."""
     raw = strip_wake_phrase(text)
