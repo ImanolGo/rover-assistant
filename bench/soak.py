@@ -60,7 +60,33 @@ def main() -> int:
     parser.add_argument("--minutes", type=float, default=30.0)
     parser.add_argument("--vision-every", type=float, default=15.0)
     parser.add_argument("--out", default="p6_soak_baseline")
+    parser.add_argument(
+        "--moonshine",
+        default=None,
+        choices=["tiny", "small", "medium"],
+        help="keep this Moonshine streaming model resident for the whole soak",
+    )
     args = parser.parse_args()
+
+    resident = None
+    if args.moonshine:
+        import glob
+        from pathlib import Path
+
+        from moonshine_voice import ModelArch
+        from moonshine_voice.transcriber import Transcriber
+
+        hits = sorted(
+            glob.glob(
+                f"models/moonshine/**/model/{args.moonshine}-streaming-en/quantized_*",
+                recursive=True,
+            )
+        )
+        if not hits:
+            raise SystemExit(f"moonshine model {args.moonshine} not found")
+        arch = getattr(ModelArch, f"{args.moonshine.upper()}_STREAMING")
+        resident = Transcriber(str(Path(hits[-1])), arch)  # load once, keep resident
+        print(f"moonshine {args.moonshine} resident", flush=True)
 
     probe = MemProbe(args.out, interval_s=0.5)
     probe.start()
@@ -90,6 +116,8 @@ def main() -> int:
 
     results = {
         "minutes": args.minutes,
+        "moonshine": args.moonshine,
+        "moonshine_resident": resident is not None,
         "vision_ok": ok,
         "vision_fail": fail,
         "vision_p50_s": round(statistics.median(lat), 2) if lat else None,
