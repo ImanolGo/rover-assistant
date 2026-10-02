@@ -77,7 +77,8 @@ def synth_dataset() -> list[tuple[str, np.ndarray, str, str | None]]:
     scratch.mkdir(parents=True, exist_ok=True)
     tmp = scratch / "stt_tmp.wav"
     for text, intent, target in SYNTH_COMMANDS:
-        out.append((text, synthesize(text, tmp), intent, target))
+        clip = synthesize(text, tmp).astype(np.float32) / 32768.0  # float32 [-1, 1]
+        out.append((text, clip, intent, target))
     return out
 
 
