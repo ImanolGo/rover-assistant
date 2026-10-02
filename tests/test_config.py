@@ -30,7 +30,8 @@ def test_load_real_config_maps_every_section():
     assert config.voice.no_speech_timeout_s == pytest.approx(3.5)
     assert config.voice.wakeword_vad_threshold == pytest.approx(0.5)
     assert config.voice.speex_noise_suppression is True
-    assert config.voice.stt_backend == "gemma"
+    assert config.voice.stt_backend == "moonshine"
+    assert config.voice.moonshine_model == "tiny"
     assert config.planner.url == "http://127.0.0.1:8080"
     assert config.api.port == 8000
     assert config.rover_backend == "serial"

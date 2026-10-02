@@ -9,6 +9,7 @@ and goes to Gemma. The table is ordered; the first match wins.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 COLORS = (
@@ -118,6 +119,48 @@ def _split_target(rest: str) -> tuple[str, tuple[str, ...]]:
     nouns = [word for word in words if word not in COLORS]
     target = nouns[-1] if nouns else words[-1]
     return target, attributes
+
+
+_VOCAB_VERBS = (
+    "go",
+    "to",
+    "find",
+    "look",
+    "for",
+    "follow",
+    "me",
+    "stop",
+    "halt",
+    "freeze",
+    "cancel",
+    "abort",
+    "turn",
+    "left",
+    "right",
+    "around",
+    "forward",
+    "backward",
+    "reverse",
+    "advance",
+    "describe",
+    "see",
+    "what",
+    "is",
+    "there",
+    "home",
+    "return",
+    "base",
+    "come",
+    "here",
+    "bring",
+    "fetch",
+)
+
+
+def vocabulary(targets: Iterable[str] = ()) -> list[str]:
+    """The word list for Moonshine ``set_keyterms``: verbs + colours + object names."""
+    words = set(_VOCAB_VERBS) | set(COLORS) | {str(t).lower() for t in targets}
+    return sorted(words)
 
 
 def classify(text: str) -> Intent:

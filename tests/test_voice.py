@@ -10,7 +10,14 @@ import httpx
 import numpy as np
 
 from rover.hal.audio import AudioConfig, NullSpeaker, drain_fd
-from rover.voice.stt import FakeStt, GemmaStt, pcm16_to_wav_bytes
+from rover.voice.stt import (
+    FakeStt,
+    GemmaStt,
+    MoonshineStt,
+    make_stt,
+    moonshine_arch,
+    pcm16_to_wav_bytes,
+)
 from rover.voice.tts import FakeTts, PiperTts, play_wav, split_sentences
 from rover.voice.vad import FakeVad, SpeechSegmenter
 from rover.voice.wakeword import FakeWakeWord
@@ -93,14 +100,80 @@ def test_gemma_stt_parses_content_and_strips_quotes():
     assert stt.transcribe(np.zeros(1600, dtype=np.int16)) == "go to the red cup"
 
 
-def test_gemma_stt_falls_back_to_reasoning_content():
+def test_gemma_stt_ignores_reasoning_content():
+    # Gemma is a thinking model, but thinking is not a transcript.
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200, json={"choices": [{"message": {"content": "", "reasoning_content": "hello"}}]}
         )
 
     stt = GemmaStt("http://test", client=httpx.Client(transport=httpx.MockTransport(handler)))
-    assert stt.transcribe(np.zeros(1600, dtype=np.int16)) == "hello"
+    assert stt.transcribe(np.zeros(1600, dtype=np.int16)) == ""
+    assert stt.supports_streaming is False
+
+
+class _FakeLine:
+    def __init__(self, text: str):
+        self.text = text
+
+
+class _FakeEvent:
+    def __init__(self, text: str):
+        self.line = _FakeLine(text)
+
+
+class _FakeMoonshineStream:
+    def __init__(self):
+        self._listener = None
+
+    def add_listener(self, listener):
+        self._listener = listener
+
+    def start(self):
+        partial = type("LineUpdated", (), {})()
+        partial.line = _FakeLine("hello")
+        self._listener(partial)
+        final = type("LineCompleted", (), {})()
+        final.line = _FakeLine("hello world")
+        self._listener(final)
+
+    def add_audio(self, data, sample_rate=16000): ...
+
+    def stop(self): ...
+
+    def close(self): ...
+
+
+class _FakeTranscriber:
+    def __init__(self):
+        self.keyterms = None
+
+    def set_keyterms(self, keyterms):
+        self.keyterms = list(keyterms)
+
+    def create_stream(self):
+        return _FakeMoonshineStream()
+
+
+def test_moonshine_stt_transcribes_and_sets_keyterms():
+    transcriber = _FakeTranscriber()
+    stt = MoonshineStt("unused", transcriber=transcriber, keyterms=["stop", "cup"])
+    assert transcriber.keyterms == ["stop", "cup"]
+    assert stt.supports_streaming is True
+    assert stt.transcribe(np.zeros(1280, dtype=np.int16)) == "hello world"
+
+
+def test_moonshine_arch_mapping():
+    assert moonshine_arch("tiny") == "TINY_STREAMING"
+    assert moonshine_arch("small") == "SMALL_STREAMING"
+    assert moonshine_arch("anything-else") == "TINY_STREAMING"
+
+
+def test_make_stt_selects_gemma_backend():
+    from types import SimpleNamespace
+
+    stt = make_stt(SimpleNamespace(stt_backend="gemma"), "http://test")
+    assert isinstance(stt, GemmaStt)
 
 
 def test_open_wakeword_forwards_speex_and_vad(monkeypatch):

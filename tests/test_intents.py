@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rover.voice.intents import Intent, classify, is_stop, strip_wake_phrase
+from rover.voice.intents import Intent, classify, is_stop, strip_wake_phrase, vocabulary
 
 
 @pytest.mark.parametrize(
@@ -115,6 +115,13 @@ def test_is_stop_shares_one_pattern():
     assert is_stop("cancel now")
     assert is_stop("Hey Rover, abort")
     assert not is_stop("go forward")
+
+
+def test_vocabulary_covers_verbs_colours_and_targets():
+    vocab = vocabulary(["cup", "person"])
+    assert {"stop", "go", "follow", "turn"} <= set(vocab)
+    assert {"red", "blue"} <= set(vocab)
+    assert {"cup", "person"} <= set(vocab)
 
 
 def test_intent_is_a_dataclass_with_raw_text():

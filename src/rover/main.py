@@ -126,8 +126,9 @@ class App:
     def _voice_loop(self) -> None:
         try:
             from rover.hal.audio import AlsaCapture, AlsaSpeaker
+            from rover.voice.intents import vocabulary
             from rover.voice.pipeline import AudioQueue, CapturePump, ThreadedWorker, VoiceLoop
-            from rover.voice.stt import GemmaStt
+            from rover.voice.stt import make_stt
             from rover.voice.tts import PiperTts
             from rover.voice.vad import SpeechSegmenter, load_silero
             from rover.voice.wakeword import make_wakeword
@@ -148,7 +149,8 @@ class App:
                 max_utterance_s=voice.max_utterance_s,
                 onset_timeout_s=voice.no_speech_timeout_s,
             )
-            stt = GemmaStt(self.config.planner.url)
+            keyterms = vocabulary(self.config.perception.target_classes_h_stop.keys())
+            stt = make_stt(voice, self.config.planner.url, keyterms=keyterms)
             tts = PiperTts(voice.tts_voice, self.config.audio)
             worker = ThreadedWorker(
                 stt, tts=tts, on_intent=self._on_intent, on_transcript=self._on_transcript
