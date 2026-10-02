@@ -181,8 +181,12 @@ it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
   camera/YOLO fail to start; `drop_caches` did not recover it. The contention
   latency table in §Phase 4 voice v2 is from **run 1** (the run whose Gemma
   baseline returned responses), not the 863-error run.
-- Moonshine small at 2/4 intra-op threads: the Python API does not expose the
-  thread count (C options only), so no sweep is possible.
+- Moonshine small at 2/4 intra-op threads: the C API exposes only a **single-thread
+  toggle** (`MOONSHINE_ORT_SINGLE_THREAD` / `ort_maybe_force_single_thread`), no
+  numeric thread count, so a 2/4 sweep is not possible (a default-vs-single-thread
+  A/B is the only available proxy).
+- `Transcriber.set_keyterms([...])` (vocabulary biasing) is the intended lever for
+  the real-mic command set; apply it when B1 recordings exist.
 - 30-min soak (criterion b) and real-mic recordings (B1): pending.
 - `bench_wake.py` motor-noise before/after: pending motor-noise audio.
 
@@ -313,6 +317,8 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-01 | STT confirmed live: **Gemma audio** via llama-server | 20 synthesized commands → 18/20 intents, p50 0.56 s; live "go to the blue bottle" / "what do you see" correct | `bench/bench_voice.py`, `hardware_tests/test_voice.py` |
 | 2026-10-02 | **Change the B3 gate criterion**: replace "MemAvailable ≥ G1 floor (574 MB)" with "≥ 350 MB **and** a 30-min soak with zero new NvMap/vision errors" | the old floor is failed by any addition, so it cannot discriminate; 350 MB + a soak keeps the real risk (NvMap exhaustion / instability) while allowing a small STT | rationale only; both unmeasured |
 | 2026-10-02 | B3 STT gate **DEFERRED — blocked on memory, pending measurement** → keep Gemma; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB vs Gemma 0.90/0.44 s. Healthy contention (run 1): Gemma p90 **1.34 s** vs tiny **0.49 s**, small 0.88 s. Tiny's full-stack MemAvailable delta and the 30-min soak are unmeasured; real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
+| 2026-10-02 | Deletion pass: drop `voice.whisper_model` (dead) and the unused `sounddevice` dependency | whisper was dropped from the runtime in Phase 1; nothing imports sounddevice (audio uses arecord/aplay) | grep over src/tests; 146 tests pass |
+| 2026-10-02 | **src/ budget revised `< 3,000` → `< 3,500` lines** for v1 | the voice v2/v3 work (threaded capture/listener/worker, in-process Piper, continuation, intents) is required functionality and the original target predates it; current count **3,274**. The `< 3,000` target still describes the original design scope; a deletion pass runs each phase, and `docs/torch_removal.md` will change the count (+~350–450 when scoped) | `find src -name '*.py' | xargs cat | wc -l` |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).

@@ -78,8 +78,7 @@ voice:
   no_speech_timeout_s: 3.5           # no speech after wake -> false wake, back to LISTENING
   max_utterance_s: 10
   max_turn_s: 8                      # keep a turn open after a lone "Hey Rover"
-  stt_backend: gemma                  # whispercpp | gemma  (decided in Phase 1: Gemma audio wins)
-  whisper_model: models/whisper/ggml-base.en.bin
+  stt_backend: gemma                  # gemma | moonshine  (Phase 1 chose Gemma; B3 pending)
   tts_voice: models/piper/en_US-lessac-medium.onnx     # (legacy voice)
   wake_sound: assets/audio/notify_asc.wav
 

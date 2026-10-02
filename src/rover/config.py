@@ -72,7 +72,6 @@ class VoiceConfig:
     max_utterance_s: float = 10.0
     max_turn_s: float = 8.0
     stt_backend: str = "gemma"
-    whisper_model: str = "models/whisper/ggml-base.en.bin"
     tts_voice: str = "models/piper/en_US-lessac-medium.onnx"
     wake_sound: str = "assets/audio/notify_asc.wav"
 
@@ -231,7 +230,6 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         max_utterance_s=float(voice_raw.get("max_utterance_s", 10.0)),
         max_turn_s=float(voice_raw.get("max_turn_s", 8.0)),
         stt_backend=voice_raw.get("stt_backend", "gemma"),
-        whisper_model=voice_raw.get("whisper_model", VoiceConfig.whisper_model),
         tts_voice=voice_raw.get("tts_voice", VoiceConfig.tts_voice),
         wake_sound=voice_raw.get("wake_sound", VoiceConfig.wake_sound),
     )
