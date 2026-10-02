@@ -113,6 +113,39 @@ STT + Piper): "Go to the blue bottle" → `go_to` (blue, +0.71 s); "What do you
 see?" → `describe` (+0.66 s); "Hey Rover" alone → `unknown`. Notify tone and
 spoken acknowledgement both worked. Raw: `bench/results/p4_voice_commands.json`.
 
+### Phase 4 voice v2 — Moonshine STT benchmark + fixes (Jetson, 2026-10-02, commit 75eeb18)
+
+**A1 fixed:** `SpeechSegmenter` now ends a turn after `voice.no_speech_timeout_s`
+(3.5 s) with no speech start — discards the turn, returns to LISTENING, logs and
+counts `false_wakes` (exposed on `/status`); the turn buffer is hard-capped at
+`max_utterance_s` worth of audio in every state.
+
+**B2 benchmark** (`bench/bench_stt_moonshine.py`, synthesized 20 commands; the
+real-mic set from `bench/record_commands.py` is still pending a human run):
+
+| Candidate | Intent acc | WER | p50 end→text | p90 | CPU % | Model RSS Δ |
+|---|---|---|---|---|---|---|
+| Gemma audio (baseline) | 0.90 | 0.29 | 0.35 s | 0.44 s | 1.3% | ~50 MB² |
+| Moonshine tiny-streaming | 0.90 | 0.40 | **0.14 s** | **0.18 s** | 123% | **154 MB** |
+| Moonshine small-streaming | **0.95** | 0.48 | 0.26 s | 0.33 s | 180% | 373 MB |
+| Moonshine medium-streaming | 0.80 | 0.41 | 0.40 s | 0.51 s | 214% | 592 MB |
+
+² Gemma's weights live in llama-server, not the brain process; its RSS is shared.
+
+**GATE B3 — NOT passed; keep Gemma as the runtime backend.** On the synthesized
+set, tiny and small meet the idle bars (p90 ≤ 400 ms, RSS ≤ 400 MB, accuracy ≥
+Gemma), and tiny matches Gemma accuracy at 2.5× lower latency. But the gate
+requires the **contention** run (p90 ≤ 600 ms with YOLO + llama-server busy) and
+full-stack `MemAvailable ≥ G1 floor`; neither was measured this session, and the
+real-mic set is pending. Moonshine **small-streaming** is the leading candidate
+(tiny is faster but its WER on hard words is worse; both are held for the
+contention run). Moonshine is CPU-only, so it would free the llama-server slot
+Gemma STT shares — worth re-measuring under load.
+
+Recorded: `bench/results/p4b_stt_moonshine.json`. Models downloaded by
+`scripts/download_models.sh` (tiny/small/medium streaming-en, `.ort`), hashed in
+`models/MODELS.md`; package pinned as the `moonshine` extra (`moonshine-voice==0.1.5`).
+
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
 |---|---|---|---|---|---|---|
@@ -238,6 +271,7 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-01 | Cap OMP + torch thread pools to 1 in `rover/__init__` | numpy/OpenCV/torch worker pools **spin-wait**; 5 unnamed threads burned ~85% each doing nothing (brain **517%** CPU) | on-device thread dump + A/B: 517% → 123.9%, fps 27–34 |
 | 2026-10-01 | Perception processes only **new** frames (capture-timestamp guard) | the loop re-ran the detector on the same frame at ~1 kHz, which would peg the GPU | sim smoke: 997k frames in seconds → camera-rate |
 | 2026-10-01 | STT confirmed live: **Gemma audio** via llama-server | 20 synthesized commands → 18/20 intents, p50 0.56 s; live "go to the blue bottle" / "what do you see" correct | `bench/bench_voice.py`, `hardware_tests/test_voice.py` |
+| 2026-10-02 | B3 STT gate **deferred → keep Gemma**; Moonshine small-streaming is the candidate | synthesized: tiny 0.90 acc / 0.18 s p90 / 154 MB, small 0.95 / 0.33 s / 373 MB, medium 0.80 / 0.51 s / 592 MB vs Gemma 0.90 / 0.44 s; the gate also needs the contention run + full-stack MemAvailable + the real-mic set, none measured yet | `bench/bench_stt_moonshine.py`, `bench/results/p4b_stt_moonshine.json` |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).

@@ -79,3 +79,24 @@ Laya question used:
     "DONE": "mission verified complete",
     "ABORT": "too many retries or unsafe, stop"}}}
 ```
+
+## B2 — STT: Moonshine streaming vs Gemma audio (Phase 4 v2)
+
+`bench/bench_stt_moonshine.py` feeds 16 kHz mono PCM to Moonshine ourselves
+(`Transcriber.add_audio`, 80 ms chunks, real-time pace; never its mic capture),
+and posts whole clips to llama-server for the Gemma baseline. Per candidate:
+intent accuracy via `rover.voice.intents.classify`, WER, end-of-speech → final
+transcript p50/p90, time to first partial containing a stop word, process CPU %,
+and model RSS (load delta). Datasets: the synthesized 20 commands (below);
+the real-mic set (`bench/data/commands`, `bench/record_commands.py`) is pending a
+human run.
+
+Run (Jetson, MAXN SUPER, one Transcriber per candidate reused across clips):
+
+```bash
+.venv/bin/python bench/bench_stt_moonshine.py --dataset synth
+```
+
+Synthesized 20 commands, 2026-10-02 (see STATUS.md §Phase 4 voice v2 for the
+gate verdict): Moonshine is CPU-only (ONNX Runtime; its GPU probe warns but
+executes on CPU).
