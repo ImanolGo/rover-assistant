@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -85,6 +86,16 @@ def write_wav(path: Path, clip: np.ndarray, rate: int) -> None:
         handle.writeframes(clip.tobytes())
 
 
+def record_take(capture: AlsaCapture, rover, seconds: float, speed: float) -> np.ndarray:
+    if rover is not None:
+        rover.drive(-speed, speed)  # spin in place (wheels up)
+    try:
+        return record(capture, seconds)
+    finally:
+        if rover is not None:
+            rover.stop()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seconds", type=float, default=3.0)
@@ -93,6 +104,10 @@ def main() -> int:
         "--no-motors", action="store_true", help="record without spinning the wheels"
     )
     parser.add_argument("--speed", type=float, default=0.15)
+    parser.add_argument(
+        "--guided", action="store_true", help="speak each prompt via TTS; auto-accept"
+    )
+    parser.add_argument("--repeat-stop", type=int, default=0, help="extra stop takes (guided)")
     parser.add_argument(
         "--noise-only",
         action="store_true",
@@ -115,39 +130,59 @@ def main() -> int:
         rover = SerialRover(RoverConfig(port=config.rover.port, speed_cap=args.speed))
 
     if args.noise_only:
-        print(f"recording {args.seconds:.0f}s of motor noise (wheels up)...")
-        if rover is not None:
-            rover.drive(-args.speed, args.speed)
-        try:
-            clip = record(capture, args.seconds)
-        finally:
-            if rover is not None:
-                rover.stop()
-            capture.close()
-            if rover is not None:
-                rover.close()
+        print(f"recording {args.seconds:.0f}s of motor noise (wheels up)...", flush=True)
+        clip = record_take(capture, rover, args.seconds, args.speed)
         write_wav(OUT_DIR / "motor_noise.wav", clip, config.audio.mic_rate)
+        capture.close()
+        if rover is not None:
+            rover.close()
         print(f"wrote {OUT_DIR / 'motor_noise.wav'} ({clip.size / config.audio.mic_rate:.0f}s)")
         return 0
 
     lines = build_lines()
     labels_path = OUT_DIR / "labels.jsonl"
     records: list[dict] = []
+    tts = None
+    if args.guided:
+        from rover.voice.tts import PiperTts
+
+        tts = PiperTts(config.voice.tts_voice, config.audio)
 
     def save() -> None:
         labels_path.write_text("\n".join(json.dumps(row) for row in records) + "\n")
+
+    def accept(text, clip, target, want_intent, want_target) -> None:
+        peak = int(np.abs(clip).max()) if clip.size else 0
+        write_wav(OUT_DIR / target, clip, config.audio.mic_rate)
+        intent = classify(text)
+        records.append(
+            {
+                "file": target,
+                "text": text,
+                "intent": want_intent or intent.name,
+                "target": want_target or intent.target,
+                "peak": peak,
+            }
+        )
+
+    def guided_prompt(spoken: str, shown: str) -> None:
+        tts.say(spoken)
+        time.sleep(0.8)
+        capture.flush()  # drop the prompt audio so it is not recorded
+        print(shown, flush=True)
 
     try:
         for index, line in enumerate(lines):
             text = str(line["text"])
             target = f"{index:02d}_{slug(text)}.wav"
+            if args.guided:
+                guided_prompt(f"Say, {text}", f"[{index + 1}/{len(lines)}] {text}")
+                clip = record_take(capture, rover, args.seconds, args.speed)
+                accept(text, clip, target, line["intent"], line["target"])
+                continue
             while True:
-                if rover is not None:
-                    rover.drive(-args.speed, args.speed)  # spin in place (wheels up)
                 print(f"[{index + 1}/{len(lines)}] record '{text}': ", end="", flush=True)
-                clip = record(capture, args.seconds)
-                if rover is not None:
-                    rover.stop()
+                clip = record_take(capture, rover, args.seconds, args.speed)
                 peak = int(np.abs(clip).max()) if clip.size else 0
                 choice = input(f"peak={peak} [Enter=accept r=redo s=skip q=quit] ").strip().lower()
                 if choice == "q":
@@ -158,22 +193,24 @@ def main() -> int:
                     break
                 if choice == "r":
                     continue
-                write_wav(OUT_DIR / target, clip, config.audio.mic_rate)
-                intent = classify(text)
-                records.append(
-                    {
-                        "file": target,
-                        "text": text,
-                        "intent": line["intent"] or intent.name,
-                        "target": line["target"] or intent.target,
-                        "peak": peak,
-                    }
-                )
+                accept(text, clip, target, line["intent"], line["target"])
                 break
+
+        for i in range(args.repeat_stop):
+            target = f"stop_{i:02d}.wav"
+            if tts is not None:
+                spoken = "Say stop" if i == 0 else "Say stop again, a little further away"
+                guided_prompt(spoken, f"[stop {i + 1}/{args.repeat_stop}]")
+            else:
+                print(f"[stop {i + 1}/{args.repeat_stop}] say stop: ", end="", flush=True)
+            clip = record_take(capture, rover, args.seconds, args.speed)
+            accept("stop", clip, target, "stop", None)
     finally:
         capture.close()
         if rover is not None:
             rover.close()
+        if tts is not None:
+            tts.close()
 
     save()
     print(f"wrote {len(records)} recordings + {labels_path}")
