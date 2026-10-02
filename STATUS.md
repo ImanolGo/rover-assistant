@@ -185,10 +185,13 @@ it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
   camera/YOLO fail to start; `drop_caches` did not recover it. The contention
   latency table in §Phase 4 voice v2 is from **run 1** (the run whose Gemma
   baseline returned responses), not the 863-error run.
-- Moonshine small at 2/4 intra-op threads: the C API exposes only a **single-thread
-  toggle** (`MOONSHINE_ORT_SINGLE_THREAD` / `ort_maybe_force_single_thread`), no
-  numeric thread count, so a 2/4 sweep is not possible (a default-vs-single-thread
-  A/B is the only available proxy).
+- Moonshine ORT threads (item 3): the C API exposes only a **single-thread toggle**
+  (`MOONSHINE_ORT_SINGLE_THREAD`), no numeric count, so no 2/4 sweep. A/B with
+  Moonshine-tiny transcribing while YOLO runs (2026-10-02 12:34, llama down, so
+  **YOLO load only, not vision contention**): default p50 0.176 / p90 0.267 /
+  **117% CPU** / YOLO 30.5 fps; `MOONSHINE_ORT_SINGLE_THREAD=1` p50 0.214 /
+  p90 **0.230** / **30% CPU** / YOLO 32.0 fps. **Chosen: single-thread** — ~4× less
+  CPU for equal/better p90; set in `rover/__init__.py`.
 - `Transcriber.set_keyterms([...])` (vocabulary biasing) is the intended lever for
   the real-mic command set; apply it when B1 recordings exist.
 - 30-min soak (criterion b) and real-mic recordings (B1): pending.
@@ -322,6 +325,7 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-02 | **Change the B3 gate criterion**: replace "MemAvailable ≥ G1 floor (574 MB)" with "≥ 350 MB **and** a 30-min soak with zero new NvMap/vision errors" | the old floor is failed by any addition, so it cannot discriminate; 350 MB + a soak keeps the real risk (NvMap exhaustion / instability) while allowing a small STT | rationale only; both unmeasured |
 | 2026-10-02 | B3 STT gate **DEFERRED — blocked on memory, pending measurement** → keep Gemma; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB vs Gemma 0.90/0.44 s. Healthy contention (run 1): Gemma p90 **1.34 s** vs tiny **0.49 s**, small 0.88 s. Tiny's full-stack MemAvailable delta and the 30-min soak are unmeasured; real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
 | 2026-10-02 | **The clean memory floor is ~920 MB, not ~574 MB.** Baseline 30-min soak: MemAvailable min 919.8 (p5 921.7), 0 errors | the old 574 MB figure came from a boot where **ollama + jtop pinned `CmaFree` at 1.8 MB**, which is what actually caused the NvMap/cudaMalloc failures — not the stack. Stopping them (`llama_up.sh` now does) restores ~220 MB CMA and llama loads first try | `p6_soak_baseline.json`, `p6_soak_tiny.json` |
+| 2026-10-02 | **Moonshine streaming is the default STT** (`voice.stt_backend: moonshine`); Gemma selectable; **tiny** provisional (real-mic decides tiny vs small); vocabulary biasing via `set_keyterms`; C3 barge-in stop enabled for streaming backends | human decision; tiny passed B3 on the synthesized set (acc 0.90, idle p90 0.18 s, contention 0.28 s, soak floor 728.8 MB, 0 errors) | `robot.yaml`, `voice/stt.py`, `bench/results/p4b_stt_moonshine.json` |
 | 2026-10-02 | **B3 gate PASSES for Moonshine tiny** (synthesized set); integration deferred to C6 (held) | tiny: acc 0.90 = Gemma, idle p90 0.18 s, healthy contention p90 0.28 s, +191 MB (soak floor 728.8 ≥ 350), 30-min soak vision 120/0 and 0 new NvMap errors; no GPU. Real-mic set is the deciding confirmation; revert to Gemma if it regresses | `p4b_vision_load.json`, `p6_soak_tiny.json`, `p4b_stt_moonshine.json` |
 | 2026-10-02 | Deletion pass: drop `voice.whisper_model` (dead) and the unused `sounddevice` dependency | whisper was dropped from the runtime in Phase 1; nothing imports sounddevice (audio uses arecord/aplay) | grep over src/tests; 146 tests pass |
 | 2026-10-02 | **src/ budget revised `< 3,000` → `< 3,500` lines** for v1 | the voice v2/v3 work (threaded capture/listener/worker, in-process Piper, continuation, intents) is required functionality and the original target predates it; current count **3,274**. The `< 3,000` target still describes the original design scope; a deletion pass runs each phase, and `docs/torch_removal.md` will change the count (+~350–450 when scoped) | `find src -name '*.py' | xargs cat | wc -l` |
