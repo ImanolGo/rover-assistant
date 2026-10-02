@@ -27,6 +27,7 @@ def test_load_real_config_maps_every_section():
     assert config.control.tick_hz == pytest.approx(10.0)
     assert config.control.follow_h_frac == (0.50, 0.65)
     assert config.voice.enabled is True
+    assert config.voice.no_speech_timeout_s == pytest.approx(3.5)
     assert config.voice.stt_backend == "gemma"
     assert config.planner.url == "http://127.0.0.1:8080"
     assert config.api.port == 8000

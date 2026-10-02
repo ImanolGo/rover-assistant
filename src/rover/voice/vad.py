@@ -56,7 +56,7 @@ class SpeechSegmenter:
         self,
         vad: Callable[[np.ndarray], dict | None],
         max_utterance_s: float = 10.0,
-        onset_timeout_s: float = 4.0,
+        onset_timeout_s: float = 3.5,
         sample_rate: int = 16000,
         preroll_frames: int = 4,
     ):
@@ -64,9 +64,12 @@ class SpeechSegmenter:
         self.max_utterance_s = float(max_utterance_s)
         self.onset_timeout_s = float(onset_timeout_s)
         self.sample_rate = int(sample_rate)
+        # Never let a stuck turn grow past max_utterance_s worth of audio.
+        self.max_turn_samples = int(max_utterance_s * sample_rate)
         self._preroll: deque[np.ndarray] = deque(maxlen=max(1, int(preroll_frames)))
         self._pending = np.zeros(0, dtype=np.float32)
         self._turn: list[np.ndarray] = []
+        self._turn_samples = 0
         self._started = False
         self._start_time = 0.0
         self._reset_time = 0.0
@@ -79,6 +82,7 @@ class SpeechSegmenter:
         self._preroll.clear()
         self._pending = np.zeros(0, dtype=np.float32)
         self._turn = []
+        self._turn_samples = 0
         self._started = False
         self._start_time = 0.0
         self._reset_time = time.monotonic()
@@ -91,7 +95,7 @@ class SpeechSegmenter:
         """
         frame = np.asarray(frame, dtype=np.int16)
         if self._started:
-            self._turn.append(frame)
+            self._append_turn(frame)
         else:
             self._preroll.append(frame)
         self._pending = np.concatenate([self._pending, frame.astype(np.float32) / 32768.0])
@@ -108,6 +112,7 @@ class SpeechSegmenter:
                 self._start_time = time.monotonic()
                 started_now = True
                 self._turn = list(self._preroll)
+                self._turn_samples = int(sum(frame.size for frame in self._turn))
             if "end" in event and self._started:
                 return "end"
 
@@ -118,6 +123,13 @@ class SpeechSegmenter:
         if not self._started and (time.monotonic() - self._reset_time) > self.onset_timeout_s:
             return "timeout"
         return None
+
+    def _append_turn(self, frame: np.ndarray) -> None:
+        """Append a frame, dropping the oldest audio past the buffer cap."""
+        self._turn.append(frame)
+        self._turn_samples += int(frame.size)
+        while self._turn and self._turn_samples - int(self._turn[0].size) >= self.max_turn_samples:
+            self._turn_samples -= int(self._turn.pop(0).size)
 
     def audio(self) -> np.ndarray:
         """The accumulated turn as int16 (empty if nothing was captured)."""

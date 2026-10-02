@@ -95,6 +95,7 @@ def test_status_exposes_voice_fields():
         assert status["transcript"] == ""
         assert status["intent"] is None
         assert "voice_error" in status
+        assert status["false_wakes"] == 0
     finally:
         app.close()
 

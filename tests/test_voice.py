@@ -65,6 +65,14 @@ def test_vad_onset_timeout_when_no_speech_arrives():
     assert segmenter.audio().size == 0
 
 
+def test_vad_turn_buffer_is_capped_at_max_utterance():
+    # 0.16 s at 16 kHz = 2560 samples = two 1280-sample frames.
+    segmenter = SpeechSegmenter(FakeVad(start_after=0), max_utterance_s=0.16, sample_rate=16000)
+    for _ in range(10):
+        segmenter.process(np.ones(1280, dtype=np.int16))
+    assert segmenter.audio().size <= 2560
+
+
 # --- STT --------------------------------------------------------------------
 
 

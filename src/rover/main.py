@@ -67,6 +67,7 @@ class App:
         self.last_transcript = ""
         self.last_intent: Intent | None = None
         self.voice_error: str | None = None
+        self._voice_loop: Any = None
         self._lock = threading.Lock()
         self._snapshot = VideoSnapshot(state=self.state)
         self._stop = threading.Event()
@@ -139,6 +140,7 @@ class App:
             segmenter = SpeechSegmenter(
                 load_silero(end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold),
                 max_utterance_s=voice.max_utterance_s,
+                onset_timeout_s=voice.no_speech_timeout_s,
             )
             stt = GemmaStt(self.config.planner.url)
             tts = PiperTts(voice.tts_voice, speaker)
@@ -152,7 +154,9 @@ class App:
                 on_transcript=self._on_transcript,
                 flush=capture.flush,
                 max_turn_s=voice.max_turn_s,
+                on_false_wake=lambda: print("voice: false wake (no speech)"),
             )
+            self._voice_loop = loop
             print("voice: listening for 'Hey Rover'")
             while not self._stop.is_set():
                 frame = capture.read_frame()
@@ -199,6 +203,7 @@ class App:
             "intent": self.last_intent.name if self.last_intent else None,
             "target": self.last_intent.target if self.last_intent else None,
             "voice_error": self.voice_error,
+            "false_wakes": getattr(self._voice_loop, "false_wakes", 0),
             "camera_backend": self.config.camera.backend,
             "sim": self.config.sim,
             "frames": self._frames,

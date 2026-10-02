@@ -147,6 +147,19 @@ def test_turn_abandoned_if_no_command_before_deadline():
     assert loop.process_frame(ZERO) is None
     assert loop.state == LISTENING
     assert stt.calls == 0
+    assert loop.false_wakes == 1
+
+
+def test_no_speech_after_wake_counts_a_false_wake():
+    loop = VoiceLoop(
+        FakeWakeWord([0.9]),
+        SpeechSegmenter(FakeVad(start_after=999), onset_timeout_s=0.0),
+        ScriptedStt([""]),
+    )
+    assert loop.process_frame(ZERO) is None  # wake -> open turn
+    assert loop.process_frame(ZERO) is None  # no speech -> timeout
+    assert loop.state == LISTENING
+    assert loop.false_wakes == 1
 
 
 def test_transcript_callback_receives_text():

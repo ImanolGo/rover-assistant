@@ -74,6 +74,7 @@ voice:
   speex_noise_suppression: true       # (legacy)
   vad_threshold: 0.5                  # (legacy)
   end_silence_ms: 800
+  no_speech_timeout_s: 3.5           # no speech after wake -> false wake, back to LISTENING
   max_utterance_s: 10
   max_turn_s: 8                      # keep a turn open after a lone "Hey Rover"
   stt_backend: gemma                  # whispercpp | gemma  (decided in Phase 1: Gemma audio wins)

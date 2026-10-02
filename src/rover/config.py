@@ -67,6 +67,7 @@ class VoiceConfig:
     speex_noise_suppression: bool = True
     vad_threshold: float = 0.5
     end_silence_ms: int = 800
+    no_speech_timeout_s: float = 3.5
     max_utterance_s: float = 10.0
     max_turn_s: float = 8.0
     stt_backend: str = "gemma"
@@ -224,6 +225,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         speex_noise_suppression=bool(voice_raw.get("speex_noise_suppression", True)),
         vad_threshold=float(voice_raw.get("vad_threshold", 0.5)),
         end_silence_ms=int(voice_raw.get("end_silence_ms", 800)),
+        no_speech_timeout_s=float(voice_raw.get("no_speech_timeout_s", 3.5)),
         max_utterance_s=float(voice_raw.get("max_utterance_s", 10.0)),
         max_turn_s=float(voice_raw.get("max_turn_s", 8.0)),
         stt_backend=voice_raw.get("stt_backend", "gemma"),

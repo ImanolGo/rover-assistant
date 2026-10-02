@@ -42,6 +42,7 @@ class VoiceLoop:
         on_transcript: Callable[[str], None] | None = None,
         flush: Callable[[], None] | None = None,
         max_turn_s: float = 8.0,
+        on_false_wake: Callable[[], None] | None = None,
     ):
         self.wakeword = wakeword
         self.segmenter = segmenter
@@ -52,8 +53,17 @@ class VoiceLoop:
         self.on_transcript = on_transcript
         self.flush = flush
         self.max_turn_s = float(max_turn_s)
+        self.on_false_wake = on_false_wake
+        self.false_wakes = 0
         self.state = LISTENING
         self._turn_deadline = 0.0
+
+    def _false_wake(self) -> None:
+        """A wake with nothing usable after it: log, count, and go back to idle."""
+        self.false_wakes += 1
+        if self.on_false_wake is not None:
+            self.on_false_wake()
+        self._resume_listening()
 
     def _flush(self) -> None:
         if self.flush is not None:
@@ -111,15 +121,15 @@ class VoiceLoop:
                 self._listen_again()  # the wake word only; wait for the command
                 return None
             if not clean:
-                self._resume_listening()
+                if time.monotonic() < self._turn_deadline:
+                    self._listen_again()  # the wake word only; wait for the command
+                else:
+                    self._false_wake()
                 return None
             return self._finish(classify(clean))
         if event == "timeout":
-            if time.monotonic() < self._turn_deadline:
-                self._listen_again()
-                return None
-            self._resume_listening()
+            self._false_wake()
             return None
         if time.monotonic() > self._turn_deadline:
-            self._resume_listening()
+            self._false_wake()
         return None
