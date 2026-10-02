@@ -133,28 +133,30 @@ real-mic set from `bench/record_commands.py` is still pending a human run):
 ² Gemma's weights live in llama-server, not the brain process; its RSS is shared.
 
 **Contention** (`bench/contention_load.py`: camera + YOLO 26.6 fps + a continuous
-Gemma vision loop; `--limit 6` synthesized commands):
+Gemma vision loop; `--limit 6` synthesized commands, **run 1** — the healthy run,
+0 vision errors in its loader):
 
 | Candidate | idle p90 | contention p50 | contention p90 |
 |---|---|---|---|
 | Gemma audio | 0.44 s | 1.24 s | **1.34 s** |
-| Moonshine tiny | 0.18 s | 0.40 s | **0.49 s** ✓ |
+| Moonshine tiny | 0.18 s | 0.40 s | **0.49 s** |
 | Moonshine small | 0.33 s | 0.80 s | **0.88 s** |
 
-Under load Gemma STT **exceeds** the 600 ms bar (1.34 s) because it shares
-llama-server's single slot with vision; Moonshine tiny passes it (0.49 s) and
-small does not (0.88 s). A clean full-stack `MemAvailable` was not obtained —
-llama's vision path failed on the repeat attempt (863 vision errors), a Known
-issue 1 flare — but Moonshine adds 154–373 MB *on top of* a stack already at the
-~574 MB G1 floor, so the "≥ G1 floor" criterion is expected to fail.
+Under load Gemma STT exceeds 600 ms (1.34 s) because it shares llama-server's
+single slot with vision; Moonshine tiny passes (0.49 s), small does not (0.88 s).
 
-**GATE B3 — NOT adopted; keep Gemma as the runtime backend.** Moonshine tiny
-matches Gemma accuracy and is 2.7× faster under load with no GPU, but the gate
-requires *all* criteria: small fails the contention p90, and tiny's extra
-154 MB is expected to break the full-stack memory floor (unverified, but the
-arithmetic on the G1 floor is clear). The real-mic set is also still pending.
-Moonshine stays a candidate if memory is freed elsewhere (the brain's
-torch/ultralytics ~1.3 GB, ARCHITECTURE §6, is the bigger lever). Recorded:
+**Revised gate criterion (2026-10-02):** the old "MemAvailable ≥ G1 floor
+(574 MB)" was wrong — *any* addition fails it. Replaced with:
+**(a) full-stack MemAvailable ≥ 350 MB, and (b) a 30-min soak with zero new
+NvMap/vision errors.** Both are **unmeasured** (Moonshine tiny's memory delta on a
+healthy full stack, and the soak).
+
+**GATE B3 — DEFERRED — blocked on memory, pending measurement. Keep Gemma.**
+Moonshine tiny matches Gemma accuracy, uses no GPU and is 2.7× faster under
+load; small fails the contention p90. We have not yet measured tiny's
+full-stack MemAvailable delta on a healthy run, nor run the 30-min soak, so the
+revised criterion is not decided. Moonshine stays a candidate; the real-mic set
+(B1) is the deciding accuracy test for tiny. Recorded:
 `bench/results/p4b_stt_contention_load.json`, `p4b_stt_moonshine.json`.
 
 Recorded: `bench/results/p4b_stt_moonshine.json`. Models downloaded by
@@ -286,7 +288,8 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-01 | Cap OMP + torch thread pools to 1 in `rover/__init__` | numpy/OpenCV/torch worker pools **spin-wait**; 5 unnamed threads burned ~85% each doing nothing (brain **517%** CPU) | on-device thread dump + A/B: 517% → 123.9%, fps 27–34 |
 | 2026-10-01 | Perception processes only **new** frames (capture-timestamp guard) | the loop re-ran the detector on the same frame at ~1 kHz, which would peg the GPU | sim smoke: 997k frames in seconds → camera-rate |
 | 2026-10-01 | STT confirmed live: **Gemma audio** via llama-server | 20 synthesized commands → 18/20 intents, p50 0.56 s; live "go to the blue bottle" / "what do you see" correct | `bench/bench_voice.py`, `hardware_tests/test_voice.py` |
-| 2026-10-02 | B3 STT gate **not adopted → keep Gemma**; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB, medium 0.80 vs Gemma 0.90/0.44 s. Under load (camera+YOLO+vision): Gemma p90 **1.34 s** (shares llama's slot) vs tiny **0.49 s**, small 0.88 s; small fails contention and tiny's +154 MB is expected to break the 574 MB G1 floor. Real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
+| 2026-10-02 | **Change the B3 gate criterion**: replace "MemAvailable ≥ G1 floor (574 MB)" with "≥ 350 MB **and** a 30-min soak with zero new NvMap/vision errors" | the old floor is failed by any addition, so it cannot discriminate; 350 MB + a soak keeps the real risk (NvMap exhaustion / instability) while allowing a small STT | rationale only; both unmeasured |
+| 2026-10-02 | B3 STT gate **DEFERRED — blocked on memory, pending measurement** → keep Gemma; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB vs Gemma 0.90/0.44 s. Healthy contention (run 1): Gemma p90 **1.34 s** vs tiny **0.49 s**, small 0.88 s. Tiny's full-stack MemAvailable delta and the 30-min soak are unmeasured; real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).
