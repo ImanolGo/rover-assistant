@@ -43,6 +43,25 @@ done
 
 # Laya checkpoints are pulled by the laya package itself in its own venv (bench 1b).
 
+# Moonshine streaming STT models (B2). The moonshine-voice library owns the CDN
+# URLs; we pin the package and cache the .ort weights under models/moonshine/.
+mkdir -p models/moonshine
+if .venv/bin/python -c "import moonshine_voice" 2>/dev/null; then
+    .venv/bin/python - <<'PY'
+from pathlib import Path
+
+from moonshine_voice import ModelArch
+from moonshine_voice.download import get_model_for_language
+
+root = Path("models/moonshine")
+for arch in (ModelArch.TINY_STREAMING, ModelArch.SMALL_STREAMING, ModelArch.MEDIUM_STREAMING):
+    path, _ = get_model_for_language("en", arch, cache_root=root)
+    print(f"moonshine {arch.name} -> {path}")
+PY
+else
+    echo "WARN: moonshine-voice not installed; skipping Moonshine models"
+fi
+
 cat >> models/MODELS.md <<EOF
 
 ## Downloaded $(date -u +%Y-%m-%d)
@@ -55,6 +74,7 @@ cat >> models/MODELS.md <<EOF
 | yolo11n.pt | $(sha models/yolo11n.pt) |
 | moondream/moondream2-text-model.gguf | $(sha models/moondream/moondream2-text-model.gguf) |
 | moondream/moondream2-mmproj.gguf | $(sha models/moondream/moondream2-mmproj.gguf) |
+$(find models/moonshine -name '*.ort' 2>/dev/null | sort | while read -r f; do echo "| $f | $(sha "$f") |"; done)
 
 llama.cpp build commit: $(git -C "$HOME/llama.cpp" rev-parse HEAD 2>/dev/null || echo unknown)
 EOF

@@ -23,6 +23,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "black"]
 laya = ["laya"]
+moonshine = ["moonshine-voice==0.1.5"]
 
 [project.scripts]
 rover = "rover.main:main"
