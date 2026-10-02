@@ -93,6 +93,11 @@ def main() -> int:
         "--no-motors", action="store_true", help="record without spinning the wheels"
     )
     parser.add_argument("--speed", type=float, default=0.15)
+    parser.add_argument(
+        "--noise-only",
+        action="store_true",
+        help="record --seconds of motor noise only into motor_noise.wav (false-wake test)",
+    )
     args = parser.parse_args()
 
     motors = not args.no_motors
@@ -108,6 +113,22 @@ def main() -> int:
     rover = None
     if motors:
         rover = SerialRover(RoverConfig(port=config.rover.port, speed_cap=args.speed))
+
+    if args.noise_only:
+        print(f"recording {args.seconds:.0f}s of motor noise (wheels up)...")
+        if rover is not None:
+            rover.drive(-args.speed, args.speed)
+        try:
+            clip = record(capture, args.seconds)
+        finally:
+            if rover is not None:
+                rover.stop()
+            capture.close()
+            if rover is not None:
+                rover.close()
+        write_wav(OUT_DIR / "motor_noise.wav", clip, config.audio.mic_rate)
+        print(f"wrote {OUT_DIR / 'motor_noise.wav'} ({clip.size / config.audio.mic_rate:.0f}s)")
+        return 0
 
     lines = build_lines()
     labels_path = OUT_DIR / "labels.jsonl"
