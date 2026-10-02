@@ -165,6 +165,7 @@ class App:
                 on_false_wake=lambda: print("voice: false wake (no speech)"),
                 worker=worker,
             )
+            worker.on_empty = loop.arm_continuation
             self._voice_loop = loop
             self._voice_pump = pump
             self._voice_worker = worker

@@ -265,3 +265,29 @@ def test_worker_path_hands_the_turn_off_and_resumes_listening():
     assert _drive_to_intent(loop) is None  # the listener does not run STT
     assert len(worker.submitted) == 1
     assert loop.state == LISTENING
+
+
+def test_threaded_path_continues_after_a_lone_wake_word():
+    # "Hey Rover" [pause] "go to the kitchen" must reach go_to(kitchen).
+    intents = []
+    worker = ThreadedWorker(
+        ScriptedStt(["Hey Rover", "go to the kitchen"]),
+        on_intent=intents.append,
+    )
+    segmenter = SpeechSegmenter(FakeVad(start_after=0, end_after=2), max_utterance_s=10.0)
+    loop = VoiceLoop(FakeWakeWord([0.9]), segmenter, worker.stt, worker=worker)
+    worker.on_empty = loop.arm_continuation
+    worker.start()
+    try:
+        loop.process_frame(ZERO)  # wake -> open turn
+        loop.process_frame(ONE)  # first VAD end -> submit "Hey Rover"
+        time.sleep(0.3)  # the worker arms the continuation
+        loop.process_frame(ONE)  # the command is captured without a new wake
+        for _ in range(20):
+            if intents:
+                break
+            time.sleep(0.05)
+    finally:
+        worker.close()
+    assert [intent.name for intent in intents] == ["go_to"]
+    assert intents[0].target == "kitchen"

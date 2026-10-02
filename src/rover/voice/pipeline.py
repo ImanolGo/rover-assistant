@@ -111,11 +111,13 @@ class ThreadedWorker:
         tts: Any = None,
         on_intent: Callable[[Intent], None] | None = None,
         on_transcript: Callable[[str], None] | None = None,
+        on_empty: Callable[[float], None] | None = None,
     ):
         self.stt = stt
         self.tts = tts
         self.on_intent = on_intent
         self.on_transcript = on_transcript
+        self.on_empty = on_empty  # called with the deadline to keep the turn open
         self._queue: queue.Queue = queue.Queue(maxsize=1)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -127,7 +129,7 @@ class ThreadedWorker:
 
     def submit(self, audio: np.ndarray, deadline: float | None = None) -> None:
         try:
-            self._queue.put_nowait(audio)
+            self._queue.put_nowait((audio, deadline))
         except queue.Full:
             try:
                 self._queue.get_nowait()  # replace the pending turn
@@ -135,14 +137,14 @@ class ThreadedWorker:
             except queue.Empty:
                 pass
             try:
-                self._queue.put_nowait(audio)
+                self._queue.put_nowait((audio, deadline))
             except queue.Full:
                 pass
 
     def _loop(self) -> None:
         while not self._stop.is_set():
             try:
-                audio = self._queue.get(timeout=0.2)
+                audio, deadline = self._queue.get(timeout=0.2)
             except queue.Empty:
                 continue
             text = self.stt.transcribe(audio)
@@ -150,7 +152,15 @@ class ThreadedWorker:
                 self.on_transcript(text)
             clean = strip_wake_phrase(text)
             if not clean:
-                continue  # wake-only / empty: no action
+                # Wake-only: keep the turn open for the command (threaded
+                # continuation), so "Hey Rover" ... pause ... command works.
+                if (
+                    self.on_empty is not None
+                    and deadline is not None
+                    and time.monotonic() < deadline
+                ):
+                    self.on_empty(deadline)
+                continue
             intent = classify(clean)
             if self.tts is not None and intent.response:
                 self.tts.say(intent.response)
@@ -194,6 +204,17 @@ class VoiceLoop:
         self.false_wakes = 0
         self.state = LISTENING
         self._turn_deadline = 0.0
+        self._armed_until: float | None = None
+
+    def arm_continuation(self, deadline: float) -> None:
+        """Worker callback: keep the turn open for the command after a lone wake."""
+        self._armed_until = deadline
+
+    def _enter_recording(self, deadline: float | None = None) -> None:
+        self._turn_deadline = (
+            deadline if deadline is not None else time.monotonic() + self.max_turn_s
+        )
+        self.state = RECORDING
 
     def _false_wake(self) -> None:
         """A wake with nothing usable after it: log, count, and go back to idle."""
@@ -214,8 +235,7 @@ class VoiceLoop:
             # during it so the turn starts clean (no chime in the pre-roll).
             self._flush()
             self.segmenter.reset()
-        self._turn_deadline = time.monotonic() + self.max_turn_s
-        self.state = RECORDING
+        self._enter_recording()
 
     def _listen_again(self) -> None:
         """Wake-only/empty turn: keep waiting for the command, but reset audio."""
@@ -225,11 +245,28 @@ class VoiceLoop:
     def _resume_listening(self) -> None:
         """Return to idle: clear VAD + wake state and drop buffered audio."""
         self.state = LISTENING
+        self._armed_until = None
         self.segmenter.reset()
         reset = getattr(self.wakeword, "reset", None)
         if reset is not None:
             reset()
         self._flush()
+
+    def _process_armed(self, frame: np.ndarray) -> None:
+        """While a lone wake word still has the turn open, capture the command."""
+        event = self.segmenter.process(frame)
+        deadline = self._armed_until
+        if event == "start":
+            self._armed_until = None
+            self._enter_recording(deadline)
+        elif event == "end":
+            self._armed_until = None
+            audio = self.segmenter.audio()
+            if self.worker is not None:
+                self.worker.submit(audio, deadline)
+            self._resume_listening()
+        elif event == "timeout":
+            self.segmenter.reset()  # keep waiting until the deadline
 
     def _transcribe(self, audio: np.ndarray) -> str:
         text = self.stt.transcribe(audio)
@@ -246,6 +283,12 @@ class VoiceLoop:
     def process_frame(self, frame: np.ndarray) -> Intent | None:
         """Feed one 80 ms int16 frame; return an Intent (inline) or None (worker)."""
         if self.state == LISTENING:
+            if self._armed_until is not None:
+                if time.monotonic() >= self._armed_until:
+                    self._armed_until = None
+                else:
+                    self._process_armed(frame)
+                    return None
             if self.wakeword.process(frame):
                 self._begin_turn()
             return None
