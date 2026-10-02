@@ -17,6 +17,11 @@ HEALTH_URL="http://127.0.0.1:8080/health"
 mkdir -p "$(dirname "$LOG")"
 
 drop_caches() {
+    # ollama and jtop hold CMA on this image; with CmaFree ~2 MB the NvMap
+    # allocation for mmproj fails (error 12). Stop them, then drop caches.
+    sudo -n systemctl stop ollama 2>/dev/null || true
+    sudo -n pkill -x ollama 2>/dev/null || true
+    sudo -n pkill -x jtop 2>/dev/null || true
     sudo -n sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory' \
         2>/dev/null || true
 }
