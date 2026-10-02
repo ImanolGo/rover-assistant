@@ -103,6 +103,35 @@ def test_gemma_stt_falls_back_to_reasoning_content():
     assert stt.transcribe(np.zeros(1600, dtype=np.int16)) == "hello"
 
 
+def test_open_wakeword_forwards_speex_and_vad(monkeypatch):
+    captured: dict = {}
+
+    class FakeModel:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            self.models = {"hey_rover": 1}
+
+        def predict(self, frame):  # noqa: ANN001
+            return {"hey_rover": 0.0}
+
+    import sys
+    import types
+
+    module = types.ModuleType("openwakeword.model")
+    module.Model = FakeModel
+    package = types.ModuleType("openwakeword")
+    package.model = module
+    monkeypatch.setitem(sys.modules, "openwakeword", package)
+    monkeypatch.setitem(sys.modules, "openwakeword.model", module)
+
+    from rover.voice.wakeword import OpenWakeWord
+
+    OpenWakeWord("x.onnx", speex_noise_suppression=True, vad_threshold=0.4)
+    assert captured["inference_framework"] == "onnx"
+    assert captured["enable_speex_noise_suppression"] is True
+    assert captured["vad_threshold"] == 0.4
+
+
 def test_fake_stt_counts_calls():
     stt = FakeStt("turn left")
     assert stt.transcribe(np.zeros(10, dtype=np.int16)) == "turn left"

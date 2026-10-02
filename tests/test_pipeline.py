@@ -170,6 +170,27 @@ def test_no_speech_after_wake_counts_a_false_wake():
     assert loop.false_wakes == 1
 
 
+def test_wake_chime_audio_is_flushed_before_capture(tmp_path):
+    sound = tmp_path / "notify.wav"
+    with wave.open(str(sound), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(np.zeros(100, dtype=np.int16).tobytes())
+
+    flushes: list[int] = []
+    loop = VoiceLoop(
+        FakeWakeWord([0.9]),
+        _segmenter(),
+        FakeStt("stop"),
+        speaker=NullSpeaker(),
+        wake_sound=str(sound),
+        flush=lambda: flushes.append(1),
+    )
+    loop.process_frame(ZERO)  # wake -> play chime -> flush buffered audio
+    assert flushes, "the chime audio must be dropped before capturing the turn"
+
+
 def test_transcript_callback_receives_text():
     seen: list[str] = []
     loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), FakeStt("stop"), on_transcript=seen.append)

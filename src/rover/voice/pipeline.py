@@ -210,6 +210,10 @@ class VoiceLoop:
         self.segmenter.reset()
         if self.speaker is not None and self.wake_sound:
             play_wav(self.speaker, self.wake_sound)
+            # The chime plays through the listener; drop the audio buffered
+            # during it so the turn starts clean (no chime in the pre-roll).
+            self._flush()
+            self.segmenter.reset()
         self._turn_deadline = time.monotonic() + self.max_turn_s
         self.state = RECORDING
 

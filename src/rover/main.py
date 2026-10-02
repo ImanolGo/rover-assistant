@@ -137,7 +137,12 @@ class App:
             speaker = AlsaSpeaker(self.config.audio)
             frames = AudioQueue(maxsize=25)
             pump = CapturePump(capture, frames)
-            wakeword = make_wakeword(voice.wakeword_model, threshold=voice.wakeword_threshold)
+            wakeword = make_wakeword(
+                voice.wakeword_model,
+                threshold=voice.wakeword_threshold,
+                speex_noise_suppression=voice.speex_noise_suppression,
+                vad_threshold=voice.wakeword_vad_threshold,
+            )
             segmenter = SpeechSegmenter(
                 load_silero(end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold),
                 max_utterance_s=voice.max_utterance_s,

@@ -46,11 +46,23 @@ class WakeWord:
 class OpenWakeWord(WakeWord):
     """Real detector backed by openWakeWord's ONNX model."""
 
-    def __init__(self, model_path: str, threshold: float = 0.5, cooldown_s: float = 2.0):
+    def __init__(
+        self,
+        model_path: str,
+        threshold: float = 0.5,
+        cooldown_s: float = 2.0,
+        speex_noise_suppression: bool = True,
+        vad_threshold: float = 0.5,
+    ):
         super().__init__(threshold, cooldown_s)
         from openwakeword.model import Model
 
-        self._model = Model(wakeword_models=[str(model_path)], inference_framework="onnx")
+        self._model = Model(
+            wakeword_models=[str(model_path)],
+            inference_framework="onnx",
+            enable_speex_noise_suppression=bool(speex_noise_suppression),
+            vad_threshold=float(vad_threshold),
+        )
         self.keyword = next(iter(self._model.models))
 
     def score(self, frame: Any) -> float:
@@ -88,6 +100,18 @@ class FakeWakeWord(WakeWord):
         self._index = 0
 
 
-def make_wakeword(model_path: str, threshold: float = 0.5, cooldown_s: float = 2.0) -> WakeWord:
+def make_wakeword(
+    model_path: str,
+    threshold: float = 0.5,
+    cooldown_s: float = 2.0,
+    speex_noise_suppression: bool = True,
+    vad_threshold: float = 0.5,
+) -> WakeWord:
     """Build the real openWakeWord detector (tests inject :class:`FakeWakeWord`)."""
-    return OpenWakeWord(model_path, threshold=threshold, cooldown_s=cooldown_s)
+    return OpenWakeWord(
+        model_path,
+        threshold=threshold,
+        cooldown_s=cooldown_s,
+        speex_noise_suppression=speex_noise_suppression,
+        vad_threshold=vad_threshold,
+    )

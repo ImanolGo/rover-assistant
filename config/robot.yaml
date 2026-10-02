@@ -71,6 +71,7 @@ voice:
   enabled: true                       # start the wake->VAD->STT listener (hardware)
   wakeword_model: models/wake_word/hey_roe_ver.onnx   # (legacy)
   wakeword_threshold: 0.5
+  wakeword_vad_threshold: 0.5         # openWakeWord internal VAD (suppress motor noise)
   speex_noise_suppression: true       # (legacy)
   vad_threshold: 0.5                  # (legacy)
   end_silence_ms: 800

@@ -34,7 +34,12 @@ def main() -> int:
     config = load_config()
     capture = AlsaCapture(config.audio)
     speaker = AlsaSpeaker(config.audio)
-    wakeword = make_wakeword(config.voice.wakeword_model, threshold=config.voice.wakeword_threshold)
+    wakeword = make_wakeword(
+        config.voice.wakeword_model,
+        threshold=config.voice.wakeword_threshold,
+        speex_noise_suppression=config.voice.speex_noise_suppression,
+        vad_threshold=config.voice.wakeword_vad_threshold,
+    )
     segmenter = SpeechSegmenter(
         load_silero(
             end_silence_ms=config.voice.end_silence_ms, threshold=config.voice.vad_threshold
