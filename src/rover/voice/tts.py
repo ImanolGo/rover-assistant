@@ -1,31 +1,28 @@
-"""voice.tts: persistent Piper process, spoken sentence by sentence.
+"""voice.tts: in-process Piper, spoken sentence by sentence.
 
-One ``piper --output-raw`` process is kept alive (load once, many sentences).
-The reply is split into sentences and each is written to Piper's stdin; raw
-16-bit PCM is read from stdout until it goes idle (Piper synthesizes faster than
-real time, so a short silent gap means the sentence is done) and streamed to the
-speaker, which lets speech start before the whole reply is synthesized.
+The ``piper-tts`` Python API is used directly (no subprocess, no idle-timeout
+guessing about where a sentence ends): the voice is loaded once, its sample rate
+comes from the model's config, and each synthesized sentence is written to the
+speaker in ~80 ms blocks. A cancel flag is checked between blocks so ``stop``
+silences the robot promptly.
+
+The playback stream is opened at the *voice's* sample rate (mono), so no numpy
+resampling is needed on the audio path — PulseAudio/aplay handles the device
+rate. This replaces the old ``piper --output-raw`` subprocess whose 0.6 s idle
+read added 0.6 s of dead air per sentence and could truncate under load.
 """
 
 from __future__ import annotations
 
 import re
-import select
-import subprocess
-import sys
-from pathlib import Path
-from typing import Any, Protocol
+import threading
+from dataclasses import replace
+from typing import Any, Iterable, Protocol
 
 import numpy as np
 
 _SENTENCE = re.compile(r"[^.!?]+[.!?]*")
-PIPER_RATE = 22050  # en_US-lessac-medium
-
-
-def default_piper_binary() -> str:
-    """Resolve the piper CLI next to the running interpreter, else rely on PATH."""
-    candidate = Path(sys.executable).with_name("piper")
-    return str(candidate) if candidate.exists() else "piper"
+BLOCK_S = 0.08  # playback block size, for prompt cancellation
 
 
 def split_sentences(text: str) -> list[str]:
@@ -35,20 +32,6 @@ def split_sentences(text: str) -> list[str]:
         return sentences
     text = (text or "").strip()
     return [text] if text else []
-
-
-def read_pcm_until_idle(stream: Any, timeout_s: float = 0.6, chunk: int = 4096) -> bytes:
-    """Read raw bytes until the stream stalls for ``timeout_s`` or closes."""
-    data = bytearray()
-    while True:
-        ready, _, _ = select.select([stream], [], [], timeout_s)
-        if not ready:
-            break
-        block = stream.read(chunk)
-        if not block:
-            break
-        data.extend(block)
-    return bytes(data)
 
 
 def play_wav(speaker: Any, path: str) -> None:
@@ -62,60 +45,63 @@ def play_wav(speaker: Any, path: str) -> None:
 
 
 class Tts(Protocol):
-    """Speak text out loud (blocking until the speaker has been fed)."""
+    """Speak text out loud; ``cancel`` silences it promptly."""
 
     def say(self, text: str) -> None: ...
+
+    def cancel(self) -> None: ...
 
     def close(self) -> None: ...
 
 
 class PiperTts:
-    """A long-lived ``piper --output-raw`` subprocess feeding the speaker HAL."""
+    """In-process Piper voice, sentence by sentence, cancellable."""
 
     def __init__(
         self,
         model_path: str,
-        speaker: Any,
-        rate: int = PIPER_RATE,
-        binary: str | None = None,
-        idle_s: float = 0.6,
+        audio_config: Any,
+        speaker: Any = None,
+        voice: Any = None,
     ):
-        self.speaker = speaker
-        self.rate = int(rate)
-        self.idle_s = float(idle_s)
-        binary = binary or default_piper_binary()
-        self._proc = subprocess.Popen(
-            [binary, "-m", str(model_path), "--output-raw"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-        )
+        self.voice = voice if voice is not None else self._load(model_path)
+        self.rate = int(self.voice.config.sample_rate)  # from the model, not hardcoded
+        if speaker is None:
+            from rover.hal.audio import AlsaSpeaker
 
-    def _synthesize(self, sentence: str) -> np.ndarray:
-        assert self._proc.stdin is not None and self._proc.stdout is not None
-        self._proc.stdin.write((sentence + "\n").encode())
-        self._proc.stdin.flush()
-        raw = read_pcm_until_idle(self._proc.stdout, self.idle_s)
-        if len(raw) % 2:
-            raw = raw[:-1]
-        return np.frombuffer(raw, dtype=np.int16).copy()
+            speaker = AlsaSpeaker(replace(audio_config, speaker_rate=self.rate, speaker_channels=1))
+        self.speaker = speaker
+        self._block = max(1, int(self.rate * BLOCK_S))
+        self._cancel = threading.Event()
+
+    @staticmethod
+    def _load(model_path: str) -> Any:
+        from piper import PiperVoice
+
+        return PiperVoice.load(str(model_path))
+
+    def cancel(self) -> None:
+        self._cancel.set()
+
+    def _synthesize(self, sentence: str) -> Iterable[bytes]:
+        return (chunk.audio_int16_bytes for chunk in self.voice.synthesize(sentence))
 
     def say(self, text: str) -> None:
+        self._cancel.clear()
         for sentence in split_sentences(text):
-            samples = self._synthesize(sentence)
-            if samples.size:
-                self.speaker.play(samples, self.rate)
+            if self._cancel.is_set():
+                return
+            for raw in self._synthesize(sentence):
+                samples = np.frombuffer(raw, dtype=np.int16)
+                for start in range(0, len(samples), self._block):
+                    if self._cancel.is_set():
+                        return
+                    self.speaker.play(samples[start : start + self._block], self.rate)
 
     def close(self) -> None:
-        if self._proc.stdin is not None:
-            try:
-                self._proc.stdin.close()
-            except OSError:
-                pass
-        try:
-            self._proc.wait(timeout=5.0)
-        except subprocess.TimeoutExpired:
-            self._proc.kill()
+        speaker_close = getattr(self.speaker, "close", None)
+        if speaker_close is not None:
+            speaker_close()
 
 
 class FakeTts:
@@ -123,8 +109,12 @@ class FakeTts:
 
     def __init__(self) -> None:
         self.spoken: list[str] = []
+        self.cancelled = False
 
     def say(self, text: str) -> None:
         self.spoken.append(text)
+
+    def cancel(self) -> None:
+        self.cancelled = True
 
     def close(self) -> None: ...

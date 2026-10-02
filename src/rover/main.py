@@ -144,7 +144,7 @@ class App:
                 onset_timeout_s=voice.no_speech_timeout_s,
             )
             stt = GemmaStt(self.config.planner.url)
-            tts = PiperTts(voice.tts_voice, speaker)
+            tts = PiperTts(voice.tts_voice, self.config.audio)
             worker = ThreadedWorker(
                 stt, tts=tts, on_intent=self._on_intent, on_transcript=self._on_transcript
             )

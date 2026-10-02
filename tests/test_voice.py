@@ -9,15 +9,9 @@ import wave
 import httpx
 import numpy as np
 
-from rover.hal.audio import NullSpeaker, drain_fd
+from rover.hal.audio import AudioConfig, NullSpeaker, drain_fd
 from rover.voice.stt import FakeStt, GemmaStt, pcm16_to_wav_bytes
-from rover.voice.tts import (
-    FakeTts,
-    default_piper_binary,
-    play_wav,
-    read_pcm_until_idle,
-    split_sentences,
-)
+from rover.voice.tts import FakeTts, PiperTts, play_wav, split_sentences
 from rover.voice.vad import FakeVad, SpeechSegmenter
 from rover.voice.wakeword import FakeWakeWord
 
@@ -127,20 +121,6 @@ def test_split_sentences():
     assert split_sentences("   ") == []
 
 
-def test_read_pcm_until_idle_returns_available_bytes_then_stops():
-    read_fd, write_fd = os.pipe()
-    try:
-        os.write(write_fd, b"\x01\x02\x03\x04")
-        stream = os.fdopen(read_fd, "rb", buffering=0)
-        try:
-            data = read_pcm_until_idle(stream, timeout_s=0.2)
-        finally:
-            stream.close()
-    finally:
-        os.close(write_fd)
-    assert data == b"\x01\x02\x03\x04"
-
-
 def test_play_wav_uses_the_wav_sample_rate(tmp_path):
     path = tmp_path / "tone.wav"
     with wave.open(str(path), "wb") as handle:
@@ -165,8 +145,47 @@ def test_drain_fd_discards_buffered_bytes_without_blocking():
         os.close(write_fd)
 
 
-def test_default_piper_binary_points_at_the_venv_cli():
-    assert default_piper_binary().endswith("piper")
+class _FakeChunk:
+    def __init__(self, samples: int):
+        self.audio_int16_bytes = np.zeros(samples, dtype=np.int16).tobytes()
+
+
+class _FakeVoice:
+    class config:
+        sample_rate = 22050
+
+    def __init__(self, samples: int = 22050):
+        self.samples = samples
+
+    def synthesize(self, text: str):
+        return [_FakeChunk(self.samples)]
+
+
+def test_piper_tts_reads_rate_and_writes_blocks():
+    speaker = NullSpeaker()
+    tts = PiperTts("unused", AudioConfig(), speaker=speaker, voice=_FakeVoice())
+    assert tts.rate == 22050  # taken from the voice, not hardcoded
+    tts.say("First sentence. Second sentence.")
+    # 22050 samples at 22050 Hz / 80 ms blocks = ~13 blocks per sentence.
+    assert len(speaker.played) >= 13 * 2
+
+
+def test_piper_tts_cancel_stops_between_blocks():
+    holder: dict = {}
+    played: list[int] = []
+
+    class CancellingSpeaker:
+        def play(self, samples, rate):
+            played.append(len(samples))
+            if len(played) == 1:
+                holder["tts"].cancel()
+
+        def close(self): ...
+
+    tts = PiperTts("unused", AudioConfig(), speaker=CancellingSpeaker(), voice=_FakeVoice())
+    holder["tts"] = tts
+    tts.say("One fairly long sentence that would take several blocks.")
+    assert played == [1764]  # only the first 80 ms block was written
 
 
 def test_fake_tts_records_speech():

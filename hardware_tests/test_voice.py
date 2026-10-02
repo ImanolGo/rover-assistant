@@ -42,7 +42,7 @@ def main() -> int:
         max_utterance_s=config.voice.max_utterance_s,
     )
     stt = GemmaStt(config.planner.url)
-    tts = PiperTts(config.voice.tts_voice, speaker)
+    tts = PiperTts(config.voice.tts_voice, config.audio)
 
     def on_transcript(text: str) -> None:
         print(f"  transcript: {text!r}", flush=True)
