@@ -12,6 +12,11 @@ Datasets: the synthesized 20 commands (``bench_voice``) and the real-mic set
 
     .venv/bin/python bench/bench_stt_moonshine.py --dataset synth
     .venv/bin/python bench/bench_stt_moonshine.py --dataset mic --contention
+    .venv/bin/python bench/bench_stt_moonshine.py --dataset mic --keyterms  # runtime bias
+
+``--keyterms`` applies the same ``set_keyterms`` vocabulary as ``rover.main`` and
+writes ``p4b_stt_moonshine_keyterms.json``. ``stop_recall`` is the share of
+stop-labelled takes classified as ``stop`` (the safety number).
 """
 
 from __future__ import annotations
@@ -35,7 +40,8 @@ sys.path.insert(0, "bench")
 from bench_voice import COMMANDS as SYNTH_COMMANDS  # noqa: E402
 from bench_voice import synthesize  # noqa: E402
 
-from rover.voice.intents import classify, strip_wake_phrase  # noqa: E402
+from rover.config import load_config  # noqa: E402
+from rover.voice.intents import classify, strip_wake_phrase, vocabulary  # noqa: E402
 from rover.voice.stt import GemmaStt  # noqa: E402
 
 URL = "http://127.0.0.1:8080"
@@ -97,7 +103,9 @@ def mic_dataset() -> list[tuple[str, np.ndarray, str, str | None]]:
     return out
 
 
-def run_moonshine(model_name: str, dataset, pace: float, contention=None) -> dict:
+def run_moonshine(
+    model_name: str, dataset, pace: float, contention=None, keyterms: list[str] | None = None
+) -> dict:
     from moonshine_voice import ModelArch
     from moonshine_voice.transcriber import LineCompleted, LineUpdated, Transcriber
 
@@ -108,6 +116,8 @@ def run_moonshine(model_name: str, dataset, pace: float, contention=None) -> dic
     baseline_rss = proc.memory_info().rss
     proc.cpu_percent(None)
     transcriber = Transcriber(model_dir, arch)  # load once per candidate
+    if keyterms:
+        transcriber.set_keyterms(keyterms)
     loaded_rss = proc.memory_info().rss
 
     rows = []
@@ -144,6 +154,7 @@ def run_moonshine(model_name: str, dataset, pace: float, contention=None) -> dic
         rows.append(
             {
                 "said": text,
+                "want": want_intent,
                 "transcript": hypothesis[:60],
                 "intent": intent.name,
                 "target": intent.target,
@@ -176,6 +187,7 @@ def run_gemma(dataset, contention=None) -> dict:
         rows.append(
             {
                 "said": text,
+                "want": want_intent,
                 "transcript": hypothesis[:60],
                 "intent": intent.name,
                 "target": intent.target,
@@ -202,12 +214,17 @@ def _summary(
     latencies = sorted(row["latency_s"] for row in rows)
     p90 = latencies[min(len(latencies) - 1, int(0.9 * len(latencies)))]
     correct = sum(row["ok"] for row in rows)
+    stops = [row for row in rows if row["want"] == "stop"]
     return {
         "candidate": name,
         "commands": rows,
         "accuracy": round(correct / len(rows), 3) if rows else 0.0,
         "correct": correct,
         "total": len(rows),
+        "stop_recall": (
+            round(sum(row["intent"] == "stop" for row in stops) / len(stops), 3) if stops else None
+        ),
+        "stop_total": len(stops),
         "wer_mean": round(statistics.mean(row["wer"] for row in rows), 3) if rows else None,
         "latency_p50_s": round(statistics.median(latencies), 3) if rows else None,
         "latency_p90_s": round(p90, 3) if rows else None,
@@ -254,7 +271,11 @@ def main() -> int:
     parser.add_argument("--pace", type=float, default=0.08, help="seconds between 80 ms chunks")
     parser.add_argument("--contention", action="store_true")
     parser.add_argument("--limit", type=int, default=0, help="only the first N commands (0 = all)")
+    parser.add_argument("--keyterms", action="store_true", help="bias Moonshine like rover.main")
     args = parser.parse_args()
+    keyterms = None
+    if args.keyterms:
+        keyterms = vocabulary(load_config().perception.target_classes_h_stop.keys())
 
     datasets: dict[str, list] = {}
     if args.dataset in ("synth", "both"):
@@ -275,21 +296,22 @@ def main() -> int:
         except Exception:  # noqa: BLE001
             print("WARN: llama-server not reachable; contention will be idle")
 
-    results = {"contention": bool(args.contention), "datasets": {}}
+    results = {"contention": bool(args.contention), "keyterms": keyterms, "datasets": {}}
     try:
         for name, rows in datasets.items():
             print(f"=== dataset: {name} ({len(rows)} commands) ===", flush=True)
             results["datasets"][name] = {}
             for candidate in args.candidates:
                 if candidate.startswith("moonshine"):
-                    summary = run_moonshine(candidate, rows, args.pace, contention)
+                    summary = run_moonshine(candidate, rows, args.pace, contention, keyterms)
                 else:
                     summary = run_gemma(rows, contention)
                 results["datasets"][name][candidate] = summary
                 print(
                     f"  {candidate:16s} acc={summary['accuracy']:.2f} "
                     f"wer={summary['wer_mean']} p50={summary['latency_p50_s']} "
-                    f"p90={summary['latency_p90_s']} cpu={summary['cpu_percent']}% "
+                    f"p90={summary['latency_p90_s']} stop={summary['stop_recall']} "
+                    f"cpu={summary['cpu_percent']}% "
                     f"rss={summary['rss_mb']}MB",
                     flush=True,
                 )
@@ -299,7 +321,8 @@ def main() -> int:
 
     from common import write_result
 
-    print(write_result("p4b_stt_moonshine", results))
+    name = "p4b_stt_moonshine_keyterms" if keyterms else "p4b_stt_moonshine"
+    print(write_result(name, results))
     return 0
 
 
