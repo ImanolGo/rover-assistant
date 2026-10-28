@@ -1,0 +1,32 @@
+{
+  "name": "p4c_playback_timing",
+  "date": "2026-10-28T10:16:36",
+  "commit": "0f38820",
+  "power_mode": "NV Power Mode: MAXN_SUPER 2",
+  "clocks": "n/a",
+  "sentence": "Testing playback timing. One, two, three, four.",
+  "speaker_latency_s": 0.2,
+  "runs": [
+    {
+      "noise_p90": 119.8,
+      "say_returned_s": 3.569,
+      "heard_end_s": 3.517,
+      "return_minus_heard_s": 0.052
+    },
+    {
+      "noise_p90": 101.3,
+      "say_returned_s": 3.535,
+      "heard_end_s": 3.499,
+      "return_minus_heard_s": 0.036
+    },
+    {
+      "noise_p90": 93.4,
+      "say_returned_s": 3.691,
+      "heard_end_s": 3.667,
+      "return_minus_heard_s": 0.024
+    }
+  ],
+  "return_minus_heard_min_s": 0.024,
+  "return_minus_heard_median_s": 0.036,
+  "early_runs": 0
+}
