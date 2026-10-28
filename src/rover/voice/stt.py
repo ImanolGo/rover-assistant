@@ -147,6 +147,14 @@ class _MoonshineStream:
             close()
 
 
+# libmoonshine's built-in VAD keeps state for the whole process and, at its default
+# threshold, gates out more and more quiet speech: the same far "stop" goes "Stop" ->
+# "" after two passes, and a new Transcriber does not reset it (STATUS 2026-10-28).
+# Our own VAD/segmenter already frames each turn, so let nearly everything through.
+# 0 is not "off": it dropped even near takes.
+VAD_THRESHOLD = 0.01
+
+
 class MoonshineStt:
     """Streaming Moonshine (CPU). The model is loaded once; one stream per turn."""
 
@@ -158,12 +166,14 @@ class MoonshineStt:
         arch: str = "TINY_STREAMING",
         keyterms: list[str] | None = None,
         transcriber: object | None = None,
+        vad_threshold: float = VAD_THRESHOLD,
     ):
         if transcriber is None:
             from moonshine_voice import ModelArch
             from moonshine_voice.transcriber import Transcriber
 
-            transcriber = Transcriber(str(model_dir), getattr(ModelArch, arch))
+            options = {"vad_threshold": str(vad_threshold)}
+            transcriber = Transcriber(str(model_dir), getattr(ModelArch, arch), options=options)
         self._transcriber = transcriber
         if keyterms:
             setter = getattr(self._transcriber, "set_keyterms", None)
@@ -209,5 +219,10 @@ def make_stt(config: object, url: str, keyterms: list[str] | None = None) -> Stt
     backend = getattr(config, "stt_backend", "moonshine")
     if backend == "moonshine":
         model = getattr(config, "moonshine_model", "tiny")
-        return MoonshineStt(moonshine_dir(model), arch=moonshine_arch(model), keyterms=keyterms)
+        return MoonshineStt(
+            moonshine_dir(model),
+            arch=moonshine_arch(model),
+            keyterms=keyterms,
+            vad_threshold=getattr(config, "moonshine_vad_threshold", VAD_THRESHOLD),
+        )
     return GemmaStt(url)

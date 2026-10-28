@@ -17,6 +17,10 @@ Datasets: the synthesized 20 commands (``bench_voice``) and the real-mic set
 ``--keyterms`` applies the same ``set_keyterms`` vocabulary as ``rover.main`` and
 writes ``p4b_stt_moonshine_keyterms.json``. ``stop_recall`` is the share of
 stop-labelled takes classified as ``stop`` (the safety number).
+
+Each Moonshine candidate runs in its own spawned process with the runtime's
+``voice.moonshine_vad_threshold`` (``--moonshine-vad`` overrides): libmoonshine's VAD
+state outlives a Transcriber, so results used to depend on run order (2026-10-28).
 """
 
 from __future__ import annotations
@@ -103,8 +107,24 @@ def mic_dataset() -> list[tuple[str, np.ndarray, str, str | None]]:
     return out
 
 
+def run_moonshine_isolated(model_name: str, dataset, pace: float, contention, keyterms, vad):
+    """``run_moonshine`` in a fresh process: libmoonshine's VAD keeps state for the life of
+    the process, so a candidate run after another one (or after many clips) heard less."""
+    import multiprocessing
+
+    with multiprocessing.get_context("spawn").Pool(1) as pool:
+        return pool.apply(
+            run_moonshine, (model_name, dataset, pace, contention is not None, keyterms, vad)
+        )
+
+
 def run_moonshine(
-    model_name: str, dataset, pace: float, contention=None, keyterms: list[str] | None = None
+    model_name: str,
+    dataset,
+    pace: float,
+    contention=None,
+    keyterms: list[str] | None = None,
+    vad_threshold: float | None = None,
 ) -> dict:
     from moonshine_voice import ModelArch
     from moonshine_voice.transcriber import LineCompleted, LineUpdated, Transcriber
@@ -115,7 +135,8 @@ def run_moonshine(
     proc = psutil.Process()
     baseline_rss = proc.memory_info().rss
     proc.cpu_percent(None)
-    transcriber = Transcriber(model_dir, arch)  # load once per candidate
+    options = {"vad_threshold": str(vad_threshold)} if vad_threshold is not None else None
+    transcriber = Transcriber(model_dir, arch, options=options)  # load once per candidate
     if keyterms:
         transcriber.set_keyterms(keyterms)
     loaded_rss = proc.memory_info().rss
@@ -165,8 +186,8 @@ def run_moonshine(
                 "stop_partial_s": round(stop_partial, 3) if stop_partial is not None else None,
             }
         )
-        if contention is not None:
-            contention.wait()
+        if contention:  # a flag in the child; the parent's thread does the hammering
+            time.sleep(0.05)
     return _summary(model_name, rows, proc, baseline_rss, loaded_rss)
 
 
@@ -273,7 +294,16 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=0, help="only the first N commands (0 = all)")
     parser.add_argument("--keyterms", action="store_true", help="bias Moonshine like rover.main")
     parser.add_argument("--name", default=None, help="result name (default from --keyterms)")
+    parser.add_argument(
+        "--moonshine-vad",
+        type=float,
+        default=None,
+        help="libmoonshine vad_threshold (default: config voice.moonshine_vad_threshold)",
+    )
     args = parser.parse_args()
+    vad = args.moonshine_vad
+    if vad is None:
+        vad = load_config().voice.moonshine_vad_threshold
     keyterms = None
     if args.keyterms:
         keyterms = vocabulary(load_config().perception.target_classes_h_stop.keys())
@@ -297,14 +327,22 @@ def main() -> int:
         except Exception:  # noqa: BLE001
             print("WARN: llama-server not reachable; contention will be idle")
 
-    results = {"contention": bool(args.contention), "keyterms": keyterms, "datasets": {}}
+    results = {
+        "contention": bool(args.contention),
+        "keyterms": keyterms,
+        "moonshine_vad_threshold": vad,
+        "moonshine_isolated": True,
+        "datasets": {},
+    }
     try:
         for name, rows in datasets.items():
             print(f"=== dataset: {name} ({len(rows)} commands) ===", flush=True)
             results["datasets"][name] = {}
             for candidate in args.candidates:
                 if candidate.startswith("moonshine"):
-                    summary = run_moonshine(candidate, rows, args.pace, contention, keyterms)
+                    summary = run_moonshine_isolated(
+                        candidate, rows, args.pace, contention, keyterms, vad
+                    )
                 else:
                     summary = run_gemma(rows, contention)
                 results["datasets"][name][candidate] = summary

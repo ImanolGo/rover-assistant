@@ -81,6 +81,7 @@ voice:
   max_turn_s: 8                      # keep a turn open after a lone "Hey Rover"
   stt_backend: moonshine              # moonshine | gemma  (B3: Moonshine default, Gemma selectable)
   moonshine_model: tiny               # tiny | small  (real-mic results decide; see STATUS)
+  moonshine_vad_threshold: 0.01      # libmoonshine's own VAD drifts deaf at default; not 0
   tts_voice: models/piper/en_US-lessac-medium.onnx     # (legacy voice)
   wake_sound: assets/audio/notify_asc.wav
 

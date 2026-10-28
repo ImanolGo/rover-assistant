@@ -165,6 +165,31 @@ def test_moonshine_stt_transcribes_and_sets_keyterms():
     assert stt.transcribe(np.zeros(1280, dtype=np.int16)) == "hello world"
 
 
+def test_make_stt_passes_moonshine_vad_threshold(monkeypatch):
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    captured: dict = {}
+
+    class FakeTranscriber:
+        def __init__(self, model_dir, arch, options=None):
+            captured.update(arch=arch, options=options)
+
+    package = ModuleType("moonshine_voice")
+    package.ModelArch = SimpleNamespace(SMALL_STREAMING="small-arch", TINY_STREAMING="tiny")
+    module = ModuleType("moonshine_voice.transcriber")
+    module.Transcriber = FakeTranscriber
+    monkeypatch.setitem(sys.modules, "moonshine_voice", package)
+    monkeypatch.setitem(sys.modules, "moonshine_voice.transcriber", module)
+    monkeypatch.setattr("rover.voice.stt.moonshine_dir", lambda model: f"models/{model}")
+
+    config = SimpleNamespace(
+        stt_backend="moonshine", moonshine_model="small", moonshine_vad_threshold=0.02
+    )
+    assert isinstance(make_stt(config, "http://test"), MoonshineStt)
+    assert captured == {"arch": "small-arch", "options": {"vad_threshold": "0.02"}}
+
+
 def test_moonshine_arch_mapping():
     assert moonshine_arch("tiny") == "TINY_STREAMING"
     assert moonshine_arch("small") == "SMALL_STREAMING"
