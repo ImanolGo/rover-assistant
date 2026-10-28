@@ -9,3 +9,4 @@ __pycache__/
 *.egg-info/
 logs/
 bench/results/smoke_test.json
+bench/data/commands_*/
