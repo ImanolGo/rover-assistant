@@ -5,9 +5,9 @@ guessing about where a sentence ends): the voice is loaded once, its sample rate
 comes from the model's config, and each synthesized sentence is written to the
 speaker in ~80 ms blocks, keeping at most ``MAX_AHEAD_S`` queued ahead of what
 is audible. A cancel flag is checked between blocks, so ``stop`` silences the
-robot within ~0.25 s. ``say()`` and :func:`play_wav` return when the sound has
-**finished playing** (``speaker.drain``), not when it was written — the
-``speaking`` flag and the post-chime flush depend on that.
+robot within ~0.25 s plus the output latency. ``say()`` and :func:`play_wav`
+return when the sound has **finished playing** (``speaker.drain``), not when it
+was written — the ``speaking`` flag and the post-chime flush depend on that.
 
 The playback stream is opened at the *voice's* sample rate (mono), so no numpy
 resampling is needed on the audio path — PulseAudio/aplay handles the device
@@ -103,7 +103,10 @@ class PiperTts:
         buffered = getattr(self.speaker, "buffered_s", None)
         if buffered is None:
             return
-        while buffered() > MAX_AHEAD_S and not self._cancel.is_set():
+        # buffered_s() includes the output latency; pace on the audio still queued,
+        # or the stream underruns between blocks and playback outlasts the clock.
+        limit = MAX_AHEAD_S + getattr(self.speaker, "latency_s", 0.0)
+        while buffered() > limit and not self._cancel.is_set():
             time.sleep(0.01)
 
     def say(self, text: str) -> None:

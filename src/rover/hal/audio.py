@@ -403,6 +403,11 @@ class AlsaSpeaker:
         """Seconds of written audio not yet heard."""
         return max(0.0, self._play_until - time.monotonic())
 
+    @property
+    def latency_s(self) -> float:
+        """Output delay included in :meth:`buffered_s` (not audio still queued)."""
+        return self.config.speaker_latency_s
+
     def drain(self, cancelled: Callable[[], bool] | None = None) -> None:
         """Block until everything written has played (or ``cancelled()`` is true)."""
         while self.buffered_s() > 0.0:

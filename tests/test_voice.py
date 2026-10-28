@@ -349,6 +349,16 @@ def test_piper_say_returns_only_after_audio_played(monkeypatch):
 
 def test_piper_say_keeps_little_audio_queued_ahead(monkeypatch):
     speaker = _clocked_speaker(monkeypatch, latency=0.0)
+    _assert_queue_bounded(speaker, latency=0.0)
+
+
+def test_piper_pacing_excludes_output_latency(monkeypatch):
+    # With latency > MAX_AHEAD_S, pacing on buffered_s() alone would starve the stream.
+    speaker = _clocked_speaker(monkeypatch, latency=0.4)
+    _assert_queue_bounded(speaker, latency=0.4)
+
+
+def _assert_queue_bounded(speaker, latency: float) -> None:
     ahead: list[float] = []
     original = speaker.play
 
@@ -359,7 +369,9 @@ def test_piper_say_keeps_little_audio_queued_ahead(monkeypatch):
     speaker.play = spy
     tts = PiperTts("unused", AudioConfig(), speaker=speaker, voice=_FakeVoice(samples=13230))
     tts.say("Six tenths of a second.")
-    assert max(ahead) <= MAX_AHEAD_S + 0.09  # at most one block past the bound
+    queued = [a - latency for a in ahead[1:]]  # audio actually waiting to play
+    assert max(queued) <= MAX_AHEAD_S + 0.09  # at most one block past the bound
+    assert min(queued) > 0.1  # never starved between blocks
 
 
 def test_play_wav_returns_after_the_chime_played(monkeypatch, tmp_path):
