@@ -184,7 +184,7 @@ rover-assistant/
 
 ## 8. Safety
 
-- Speed cap `0.15` on the 0.5 scale by default.
+- Speed cap `0.35` on the 0.5 scale by default (0.30 deadband floor + 0.05 band; commands below 0.15 become 0, 0.15–0.30 become 0.30).
 - Watchdog of 0.5 s in the brain, plus the firmware heartbeat (verify its timeout in Phase 2).
 - The "stop" regex runs before anything else. `/stop` on the API does the same.
 - Low battery (from T=131 feedback, below the threshold) → refuse motion and announce it.

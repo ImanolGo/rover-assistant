@@ -24,7 +24,9 @@ testable Python project.
    (`csi` | `usb` | `file`), audio (`alsa` | `wav`), rover (`serial` | `dryrun`).
    Everything must run on a laptop with `ROVER_SIM=1`.
 4. **Motors are dangerous.**
-   - Default rover speed cap is `0.15` (on the firmware's 0.5 scale).
+   - Default rover speed cap is `0.35` (on the firmware's 0.5 scale): the 0.30 deadband
+     floor plus a 0.05 proportional band. Was 0.15, which the floor made unreachable
+     (STATUS decision log 2026-10-28). Raise only after field tests.
    - The rover writer must stop the wheels if no command arrives for 0.5 s.
    - "stop" is handled by regex **before** any model runs.
    - First run of any motion code is wheels-up (robot on a box).
@@ -55,7 +57,7 @@ testable Python project.
   Motion command is `{"T":1,"L":x,"R":y}`, x/y in −0.5…0.5. No wheel encoders.
 - **Motor deadband:** the wheels do nothing below |0.25|, start at ~0.3 and
   turn strongly at 0.4. Commands below the floor must be mapped up to
-  `min_wheel_pwm` (0.3) or set to zero.
+  `min_wheel_pwm` (0.3) or set to zero: below 0.15 → 0, from 0.15 up → 0.3.
 - **IMU:** the base IMU gyro has a ~0.36 rad/s constant bias. Calibrate at
   startup before trusting yaw.
 - **Audio:** mic is `USB PnP Sound Device` (16 kHz mono via `plughw`). Speaker

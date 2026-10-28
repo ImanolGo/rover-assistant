@@ -20,7 +20,7 @@ from rover.hal.rover import RoverConfig, SerialRover
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", default="/dev/ttyTHS1")
-    parser.add_argument("--speed", type=float, default=0.15)
+    parser.add_argument("--speed", type=float, default=0.30)
     parser.add_argument("--seconds", type=float, default=0.5)
     parser.add_argument("--yes", action="store_true", help="confirm wheels are off the ground")
     args = parser.parse_args()

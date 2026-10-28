@@ -118,7 +118,7 @@ def main() -> int:
     parser.add_argument(
         "--no-motors", action="store_true", help="record without spinning the wheels"
     )
-    parser.add_argument("--speed", type=float, default=0.15)
+    parser.add_argument("--speed", type=float, default=0.30)
     parser.add_argument(
         "--guided", action="store_true", help="speak each prompt via TTS; auto-accept"
     )

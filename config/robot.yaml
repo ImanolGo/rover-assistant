@@ -37,8 +37,8 @@ rover:
   rts_dtr_false: true           # (legacy)
   write_hz: 20
   watchdog_s: 0.5
-  speed_cap: 0.15               # on firmware 0..0.5 scale; raise only after field tests
-  min_wheel_pwm: 0.30           # (legacy) deadband: no motion below ~0.25
+  speed_cap: 0.35               # firmware 0..0.5 scale; floor 0.30 + 0.05 proportional band (2026-10-28)
+  min_wheel_pwm: 0.30           # (legacy) deadband: no motion below ~0.25; <0.15 -> 0, else >= 0.30
   feedback: true                # T=131 continuous feedback (battery, IMU)
   gyro_bias_calibrate_s: 2.0    # (legacy) ~0.36 rad/s bias
   low_battery_v: 10.5           # (tune) legacy saw 12.2 V charged, ~10.0 V flat
@@ -48,7 +48,7 @@ control:
   kp_turn: 0.9                  # (tune)
   bearing_deadband_deg: 3
   approach_max_bearing_deg: 15
-  v_max: 0.15
+  v_max: 0.35                   # = speed_cap; slower than the floor is not possible
   search_step_deg: 35
   search_pause_s: 0.5
   search_max_steps: 12

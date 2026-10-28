@@ -78,9 +78,20 @@ def test_large_command_not_altered_by_deadband():
 
 def test_compensate_deadband_sign_and_zero():
     assert compensate_deadband(0.0, 0.3) == 0.0
-    assert compensate_deadband(0.05, 0.3) == pytest.approx(0.3)
-    assert compensate_deadband(-0.05, 0.3) == pytest.approx(-0.3)
+    assert compensate_deadband(0.05, 0.3) == 0.0  # tiny correction -> stay put
+    assert compensate_deadband(-0.14, 0.3) == 0.0
+    assert compensate_deadband(0.15, 0.3) == pytest.approx(0.3)  # half floor -> floor
+    assert compensate_deadband(-0.2, 0.3) == pytest.approx(-0.3)
+    assert compensate_deadband(0.32, 0.3) == pytest.approx(0.32)  # proportional band
     assert compensate_deadband(0.4, 0.3) == pytest.approx(0.4)
+
+
+def test_default_cap_leaves_a_proportional_band_above_the_floor():
+    rover = DryRunRover(RoverConfig())  # cap 0.35, floor 0.30
+    rover.drive(0.33, -0.5)
+    assert rover.last_command == (pytest.approx(0.33), pytest.approx(-0.35))
+    rover.drive(0.2, 0.05)
+    assert rover.last_command == (pytest.approx(0.3), 0.0)
 
 
 # --- dry-run backend ---------------------------------------------------------
@@ -96,7 +107,7 @@ def test_dryrun_records_limited_commands():
 
 def test_dryrun_applies_deadband_floor():
     rover = DryRunRover(RoverConfig(speed_cap=0.5, min_wheel_pwm=0.3))
-    rover.drive(0.02, -0.02)
+    rover.drive(0.2, -0.2)
     assert rover.last_command == (pytest.approx(0.3), pytest.approx(-0.3))
 
 

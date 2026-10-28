@@ -305,7 +305,7 @@ latency recorded; 20 recorded commands ≥ 90% correct intents.
 
 **Exit (laptop):** in sim mode with a webcam, "go to the cup" drives the
 virtual L/R bars correctly and verification is called.
-**Exit (Jetson, wheels up then floor at cap 0.15):** all three behaviours work
+**Exit (Jetson, wheels up then floor at cap 0.35):** all three behaviours work
 end-to-end once.
 
 ---

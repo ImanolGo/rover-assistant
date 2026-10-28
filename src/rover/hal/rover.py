@@ -5,8 +5,8 @@ Ports the legacy ROS2 ``uart_motor_controller.py`` logic without ROS:
 - serial opened with RTS/DTR forced low (Wave Rover docs);
 - a 20 Hz writer sending ``{"T":1,"L":x,"R":y}`` JSON lines;
 - a watchdog that zeroes the wheels when no fresh command arrives (0.5 s);
-- the DC-motor deadband mapping (nonzero commands are raised to
-  ``min_wheel_pwm`` so the drivetrain actually moves);
+- the DC-motor deadband mapping (a command rounds to 0 or up to
+  ``min_wheel_pwm``, whichever is nearer, so the drivetrain never stalls);
 - an optional T=131 feedback reader for battery voltage and IMU.
 
 Motors are dangerous: ``drive()`` is the only motion entry point, it clamps to
@@ -37,7 +37,7 @@ class RoverConfig:
     write_timeout_s: float = 1.0
     write_hz: float = 20.0
     watchdog_s: float = 0.5
-    speed_cap: float = 0.15
+    speed_cap: float = 0.35
     min_wheel_pwm: float = 0.30
     feedback: bool = True
     gyro_bias_calibrate_s: float = 2.0
@@ -48,13 +48,17 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 def compensate_deadband(speed: float, min_wheel_pwm: float) -> float:
-    """Raise a small nonzero wheel command to the static-friction floor.
+    """Map a wheel command out of the stall band ``(0, min_wheel_pwm)``.
 
-    Exact zero stays exactly zero (stop must remain stopped); the sign is kept.
+    Below half the floor the command becomes 0 (a tiny correction must not jump
+    to full floor speed); from there up to the floor it is raised to the floor.
+    Exact zero stays exactly zero; the sign is kept.
     """
-    if speed == 0.0 or min_wheel_pwm <= 0.0:
+    if speed == 0.0 or min_wheel_pwm <= 0.0 or abs(speed) >= min_wheel_pwm:
         return speed
-    return math.copysign(max(abs(speed), min_wheel_pwm), speed)
+    if abs(speed) < min_wheel_pwm / 2:
+        return 0.0
+    return math.copysign(min_wheel_pwm, speed)
 
 
 def twist_to_wheel_speeds(

@@ -18,7 +18,7 @@ def test_load_real_config_maps_every_section():
     assert config.camera.capture == (1640, 1232)
     assert config.camera.output == (820, 616)
     assert config.rover.port == "/dev/ttyTHS1"
-    assert config.rover.speed_cap == pytest.approx(0.15)
+    assert config.rover.speed_cap == pytest.approx(0.35)
     assert config.rover.min_wheel_pwm == pytest.approx(0.30)
     assert config.perception.conf == pytest.approx(0.35)
     assert config.perception.tracker == "bytetrack.yaml"
