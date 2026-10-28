@@ -309,6 +309,9 @@ class _FakeAplay:
     def poll(self):
         return None
 
+    def wait(self, timeout=None):
+        return 0
+
 
 def _clocked_speaker(monkeypatch, latency: float = 0.05) -> AlsaSpeaker:
     monkeypatch.setattr(AlsaSpeaker, "_spawn", lambda self: setattr(self, "_proc", _FakeAplay()))
@@ -321,7 +324,28 @@ def test_speaker_clock_counts_latency_once_and_queues_clips(monkeypatch):
     clip = np.zeros(1600, dtype=np.int16)  # 0.1 s at 16 kHz
     speaker.play(clip, 16000)
     speaker.play(clip, 16000)  # back-to-back: no second latency
-    assert 0.2 < speaker.buffered_s() <= 0.25
+    assert speaker.latency_s + 0.15 < speaker.buffered_s() <= speaker.latency_s + 0.2
+    speaker.close()
+
+
+def test_speaker_stream_is_continuous_and_plays_a_lone_clip_promptly(monkeypatch):
+    speaker = _clocked_speaker(monkeypatch, latency=0.0)
+    time.sleep(0.3)  # idle: the feeder keeps writing silence, the stream never stops
+    idle_bytes = speaker._proc.stdin.getvalue()
+    assert len(idle_bytes) > 0 and not any(idle_bytes)
+    speaker.play(np.full(4410, 10000, dtype=np.int16), 22050)  # lone 0.2 s "chime"
+    time.sleep(0.15)
+    assert any(speaker._proc.stdin.getvalue()[len(idle_bytes) :])  # already handed on
+    speaker.close()
+
+
+def test_speaker_clear_drops_queued_audio(monkeypatch):
+    speaker = _clocked_speaker(monkeypatch, latency=0.0)
+    speaker.play(np.full(22050, 10000, dtype=np.int16), 22050)  # 1 s
+    speaker.clear()
+    assert not speaker._queue
+    assert speaker.buffered_s() <= speaker.latency_s
+    speaker.close()
 
 
 def test_speaker_drain_waits_for_playback_and_is_cancellable(monkeypatch):
@@ -329,7 +353,7 @@ def test_speaker_drain_waits_for_playback_and_is_cancellable(monkeypatch):
     speaker.play(np.zeros(3200, dtype=np.int16), 16000)  # 0.2 s
     started = time.monotonic()
     speaker.drain()
-    assert time.monotonic() - started >= 0.18
+    assert time.monotonic() - started >= speaker.latency_s + 0.18
     assert speaker.buffered_s() == 0.0
 
     speaker.play(np.zeros(16000, dtype=np.int16), 16000)  # 1 s
@@ -349,16 +373,16 @@ def test_piper_say_returns_only_after_audio_played(monkeypatch):
 
 def test_piper_say_keeps_little_audio_queued_ahead(monkeypatch):
     speaker = _clocked_speaker(monkeypatch, latency=0.0)
-    _assert_queue_bounded(speaker, latency=0.0)
+    _assert_queue_bounded(speaker)
 
 
 def test_piper_pacing_excludes_output_latency(monkeypatch):
     # With latency > MAX_AHEAD_S, pacing on buffered_s() alone would starve the stream.
     speaker = _clocked_speaker(monkeypatch, latency=0.4)
-    _assert_queue_bounded(speaker, latency=0.4)
+    _assert_queue_bounded(speaker)
 
 
-def _assert_queue_bounded(speaker, latency: float) -> None:
+def _assert_queue_bounded(speaker) -> None:
     ahead: list[float] = []
     original = speaker.play
 
@@ -369,7 +393,7 @@ def _assert_queue_bounded(speaker, latency: float) -> None:
     speaker.play = spy
     tts = PiperTts("unused", AudioConfig(), speaker=speaker, voice=_FakeVoice(samples=13230))
     tts.say("Six tenths of a second.")
-    queued = [a - latency for a in ahead[1:]]  # audio actually waiting to play
+    queued = [a - speaker.latency_s for a in ahead[1:]]  # audio actually waiting to play
     assert max(queued) <= MAX_AHEAD_S + 0.09  # at most one block past the bound
     assert min(queued) > 0.1  # never starved between blocks
 

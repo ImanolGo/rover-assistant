@@ -323,19 +323,25 @@ def find_pulse_source(name: str) -> str | None:
     return next((n for n in _pactl_names("sources") if needle in _normalise(n)), None)
 
 
+STREAM_CHUNK_S = 0.02  # feeder write size
+STREAM_LEAD_S = 0.15  # how far the feeder keeps the stream ahead of real time
+APLAY_BUFFER_US = 120_000  # < lead, so aplay's buffer fills and playback starts at once
+
+
 class AlsaSpeaker:
-    """Real playback through ``aplay``.
+    """Real playback through ``aplay``, as one continuous stream.
 
     Here pipewire/pulseaudio owns the UACDemo card, so direct ``plughw:0,0`` is
     busy and PortAudio cannot open it. We resolve the matching PulseAudio sink by
-    name and stream raw 48 kHz stereo S16 to ``aplay -D pulse`` with
-    ``PULSE_SINK`` set; with no sound server (headless) we fall back to the ALSA
-    ``plughw`` device. ``aplay`` restarts once if the open races.
+    name and stream raw S16 to ``aplay -D pulse`` with ``PULSE_SINK`` set; with
+    no sound server (headless) we fall back to the ALSA ``plughw`` device.
 
-    ``play()`` returns as soon as the pipe takes the data, long before it is
-    heard (pipe + aplay + sound-server buffering). A playback clock tracks when
-    the written audio will actually end; :meth:`drain` waits for it, so "done
-    speaking" means silent, not merely written.
+    The stream never goes idle: a feeder thread writes queued audio, or silence
+    when there is none, ``STREAM_LEAD_S`` ahead of real time. An idle aplay/pulse
+    stream holds a short clip (the 0.26 s wake chime) until more audio arrives,
+    so it played seconds late; a continuous stream also makes the output delay
+    constant. ``play()`` only queues; a playback clock tracks when queued audio
+    will have been heard, and :meth:`drain` waits for it.
     """
 
     def __init__(self, config: AudioConfig, device: str | None = None):
@@ -344,10 +350,16 @@ class AlsaSpeaker:
         self.device = device or (
             find_device(list_alsa_devices("-l", "aplay"), config.speaker_name) or "default"
         )
+        self._bytes_per_s = 2 * config.speaker_channels * config.speaker_rate
+        self._chunk = int(self._bytes_per_s * STREAM_CHUNK_S) // 4 * 4
         self._lock = threading.Lock()
+        self._queue = bytearray()  # speaker-format PCM not yet handed to aplay
         self._proc: subprocess.Popen | None = None
-        self._play_until = 0.0  # monotonic time the written audio finishes playing
+        self._play_until = 0.0  # monotonic time the queued audio will have been heard
+        self._closing = threading.Event()
         self._spawn()
+        self._feeder = threading.Thread(target=self._feed, name="speaker", daemon=True)
+        self._feeder.start()
 
     def _spawn(self) -> None:
         target, env = self.device, None
@@ -360,6 +372,8 @@ class AlsaSpeaker:
                 "-q",
                 "-D",
                 target,
+                "-B",
+                str(APLAY_BUFFER_US),
                 "-r",
                 str(self.config.speaker_rate),
                 "-c",
@@ -376,46 +390,73 @@ class AlsaSpeaker:
             env=env,
         )
 
+    def _feed(self) -> None:
+        written_s, t_ref = 0.0, time.monotonic()
+        while not self._closing.is_set():
+            ahead = written_s - (time.monotonic() - t_ref)
+            if ahead > STREAM_LEAD_S:
+                time.sleep(min(STREAM_CHUNK_S, ahead - STREAM_LEAD_S))
+                continue
+            if ahead < -STREAM_CHUNK_S:  # fell behind (load): rebuild the lead
+                written_s, t_ref = 0.0, time.monotonic()
+            with self._lock:
+                chunk = bytes(self._queue[: self._chunk])
+                del self._queue[: self._chunk]
+            chunk = chunk.ljust(self._chunk, b"\0")
+            try:
+                if self._proc is None or self._proc.poll() is not None:
+                    self._spawn()
+                self._proc.stdin.write(chunk)
+                self._proc.stdin.flush()
+            except (BrokenPipeError, OSError, ValueError):
+                time.sleep(0.2)  # aplay died or the open raced: respawn next round
+                self._proc = None
+                written_s, t_ref = 0.0, time.monotonic()
+                continue
+            written_s += len(chunk) / self._bytes_per_s
+
     def play(self, samples: np.ndarray, rate: int) -> None:
+        """Queue audio; returns at once (use :meth:`drain` to wait until heard)."""
         fmt = to_speaker_format(samples, rate, self.config)
         pcm = (np.clip(fmt, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
         with self._lock:
-            for attempt in range(2):
-                if self._proc is None or self._proc.poll() is not None:
-                    self._spawn()
-                try:
-                    self._proc.stdin.write(pcm)
-                    self._proc.stdin.flush()
-                    self._advance_clock(len(samples) / float(rate))
-                    return
-                except (BrokenPipeError, OSError):
-                    if attempt == 1:
-                        raise
-                    time.sleep(0.2)
+            self._queue += pcm
+            self._advance_clock(len(samples) / float(rate))
 
     def _advance_clock(self, duration_s: float) -> None:
         now = time.monotonic()
-        if self._play_until <= now:  # idle: this clip starts after the output latency
-            self._play_until = now + self.config.speaker_latency_s
+        if self._play_until <= now:  # nothing queued: this clip starts after the delay
+            self._play_until = now + self.latency_s
         self._play_until += duration_s
 
+    def clear(self) -> None:
+        """Drop queued audio (stop/cancel); what aplay already holds still plays."""
+        with self._lock:
+            self._queue.clear()
+            self._play_until = min(self._play_until, time.monotonic() + self.latency_s)
+
     def buffered_s(self) -> float:
-        """Seconds of written audio not yet heard."""
+        """Seconds until everything queued has been heard."""
         return max(0.0, self._play_until - time.monotonic())
 
     @property
     def latency_s(self) -> float:
-        """Output delay included in :meth:`buffered_s` (not audio still queued)."""
-        return self.config.speaker_latency_s
+        """Constant output delay included in :meth:`buffered_s`: stream lead + sound server."""
+        return STREAM_LEAD_S + self.config.speaker_latency_s
 
     def drain(self, cancelled: Callable[[], bool] | None = None) -> None:
-        """Block until everything written has played (or ``cancelled()`` is true)."""
+        """Block until everything queued has played (or ``cancelled()`` is true)."""
         while self.buffered_s() > 0.0:
             if cancelled is not None and cancelled():
                 return
             time.sleep(min(0.02, self.buffered_s()))
 
     def close(self) -> None:
+        deadline = time.monotonic() + 2.0
+        while self._queue and time.monotonic() < deadline:  # let queued audio out
+            time.sleep(0.02)
+        self._closing.set()
+        self._feeder.join(timeout=1.0)
         if self._proc is None:
             return
         try:

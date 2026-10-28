@@ -95,6 +95,9 @@ class PiperTts:
 
     def cancel(self) -> None:
         self._cancel.set()
+        clear = getattr(self.speaker, "clear", None)
+        if clear is not None:
+            clear()  # drop queued speech: silent within the speaker's output delay
 
     def _synthesize(self, sentence: str) -> Iterable[bytes]:
         return (chunk.audio_int16_bytes for chunk in self.voice.synthesize(sentence))
