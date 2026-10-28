@@ -1,7 +1,7 @@
 # STATUS.md
 
 **Current phase:** pre-5 fix pass (audit 2026-10-28) → then 5 — Brain: planner, skills, state machine
-**Last updated:** 2026-10-28 (audit fixes; audio stream + chime fixes; B1 real-mic benchmark, Moonshine VAD drift fix; f18dd6c)
+**Last updated:** 2026-10-28 (audit fixes; audio fixes; B1 real-mic benchmark; Moonshine small default + soak; first `rover` voice run; 8744ea0)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -284,6 +284,31 @@ The data favours **small** (+239 MB vs tiny; the soak floor would drop from ~729
 estimated ~490 MB, still ≥ 350 MB but unmeasured, so it needs a 30-min soak). It also
 favours a Gemma second opinion for stop while moving.
 
+**30-min soak, Moonshine small resident inside `rover`** (`bench/soak.py --minutes 30
+--out p6_soak_small`, 2026-10-28, MAXN SUPER; `rover` = camera + YOLO + live voice, one
+Gemma vision query / 15 s):
+
+| Stack | vision | MemAvailable min / p5 | swap | NvMap/Argus errors | YOLO fps p50 / min |
+|---|---|---|---|---|---|
+| baseline (Gemma STT), 10-02 | 120 / 0 | 919.8 / 921.7 MB | +23.8 MB | 0 | — |
+| + Moonshine tiny (soak process), 10-02 | 120 / 0 | 728.8 / 730.5 MB | +0 MB | 0 | 36.2 / 24.9 |
+| **+ Moonshine small (in `rover`), run 2** | **120 / 0** | **598.3 / 606.4 MB** | +40.0 MB | **0** | 33.0 / 18.9 |
+
+Run 2 passes the B3 memory criterion (≥ 350 MB plus a clean soak). Run 1 (3d2da68: min
+428.3, swap +86, one Argus `NvMap error 12 / InsufficientMemory` in the camera at an unknown
+time, camera recovered) is superseded. Its voice thread died after the first turn (Known
+issue 20), and the run started straight after `drop_caches` + an `nvargus-daemon` restart.
+Run 2 used a timestamped log and had zero errors. The ~170 MB gap between run 1 and run 2 is
+boot-to-boot variance and shows the floor is not a single number.
+
+**First voice run through `rover` on hardware** (Known issue 14):
+- Wake → "What do you see?" → `describe` worked end to end with Moonshine small.
+- It then exposed two startup/runtime bugs, both fixed: `speexdsp_ns` was missing (decision
+  log), and the barge-in double close (Known issue 20).
+- Run 2: voice alive for 30 min, 0 false wakes, `frames_dropped` flat at the 41 from model
+  loading.
+- Still to verify: a spoken stop while the wheels actually move, and barge-in.
+
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
 |---|---|---|---|---|---|---|
@@ -424,7 +449,7 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-28 | **Wake chime: flush first, queue without waiting, keep it in the turn** (runtime + recorder) | flushing after the drained chime clipped one-breath commands; recognition on takes containing the chime is unaffected | §Phase 4 voice v4; `tests/test_pipeline.py` |
 | 2026-10-28 | **`voice.moonshine_vad_threshold: 0.01`**; STT bench isolates each Moonshine candidate in its own process | libmoonshine's built-in VAD state outlives the Transcriber and drifts deaf at its default threshold (same take "Stop" → "" after two passes); 0.01 stayed stable over 26 clips; 0 breaks it. Small on the quiet set 0.44 → 0.67 acc, stop 0.16 → 0.44 | Known issue 17; `p4b_stt_mic_*_vad.json` (df93602) |
 | 2026-10-28 | **B1 real-mic result recorded; the B3 "tiny" choice is not confirmed** | real audio: tiny 0.48 / 0.35 acc (quiet / motors) vs small 0.67 / 0.48 and Gemma 0.79 / 0.54; small/medium ≈ Gemma on commands, Gemma best on distant stops. Model switch left to the operator (small needs a soak) | §Phase 4 voice v4 |
-| 2026-10-28 | **Moonshine default tiny → small** (operator decision) | B1 real-mic: small 0.67 / 0.48 acc (quiet / motors) vs tiny 0.48 / 0.35, stop 0.44 vs 0.24; +239 MB. 30-min soak with small resident pending (camera not detected this boot) | §Phase 4 voice v4 |
+| 2026-10-28 | **Moonshine default tiny → small** (operator decision) | B1 real-mic: small 0.67 / 0.48 acc (quiet / motors) vs tiny 0.48 / 0.35, stop 0.44 vs 0.24; +239 MB. **30-min soak passes** (run 2): MemAvailable min 598.3 / p5 606.4 MB, swap +40 MB, vision 120/0, YOLO fps p50 33.0, 0 NvMap/Argus errors, voice alive throughout | `p6_soak_small.json` (8744ea0; run 1 at 3d2da68 is superseded, see §Phase 4 voice v4) |
 | 2026-10-28 | **`voice.speex_noise_suppression` true → false** (operator decision) | `speexdsp_ns` was never installed (it needs `libspeexdsp-dev` and a source build), so openWakeWord raised at startup and voice inside `rover` never ran. Every wake-word test so far ran without speex. `voice disabled: …` is now flushed to the log | first `rover` voice run on hardware, 2026-10-28 |
 | 2026-10-28 | `planner.mode` default → `completion_fewshot` | matches the bench 1.9 decision (90% vs 83%); the config still said `jinja_tools` | bench 1.9 row above |
 
@@ -447,4 +472,5 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 16. `scripts/llama_up.sh` uses `sudo -n` and silently skips stopping ollama/jtop when passwordless sudo is not configured (the case on this Jetson, 2026-10-28) — it then fails 4× with no hint (see Known issue 12). Either configure passwordless sudo for those commands or disable ollama/jtop at boot (operator decision). **Resolved 2026-10-28:** ollama + jtop disabled at boot (`systemctl disable --now`). Stopping them alone left CmaFree at 8 MB; `drop_caches` + `compact_memory` (sudo) raised it to **218 MB** and llama-server loaded on attempt 1 (42 MB CMA free after load). The cache drop still needs sudo after heavy file I/O (Known issue 1).
 17. **libmoonshine VAD drift** (moonshine-voice 0.1.5): the library's built-in VAD keeps state for the whole process. At its default threshold, quiet speech is increasingly dropped: the same far "stop" goes "Stop" → "" within two passes, and later even near takes come back empty. A new Transcriber, a new stream, `identify_speakers=false` and `transcribe_without_streaming` do not reset it. **Mitigated 2026-10-28:** `voice.moonshine_vad_threshold: 0.01` (stable over 26 clips in one process; 0 is broken). Not yet soak-tested over a long `rover` session; worth an upstream report.
 18. **Spoken stop range is short.** On the B1 sets every model hears near takes, but Moonshine small returns empty transcripts beyond roughly the 9th of 20 stepped-back takes (quiet) / 5th (wheels running). Gemma manages 12 / 8. The operator was ~7 m away at the last take. Wheel noise at 0.30 is about as loud as speech at the mic. Never rely on voice alone to stop the robot: `/stop` and the 0.5 s watchdog are the guarantee. Improving it needs a better mic or mic placement (gain is not the limit, §Phase 4 voice v4). Re-check with the wheels on the floor.
-19. **CSI camera not detected on the 2026-10-28 boot:** `imx219 … error during i2c read probe (-121)` on both ports, no `/dev/video0`; `rover` ran with `fps 0`. This is a hardware or connection fault (ribbon cable). The operator is reseating it and rebooting.
+19. **Resolved 2026-10-28 (cable reseated, reboot; IMX219 bound on port 10).** Was: **CSI camera not detected on the 2026-10-28 boot:** `imx219 … error during i2c read probe (-121)` on both ports, no `/dev/video0`; `rover` ran with `fps 0`. This is a hardware or connection fault (ribbon cable). The operator is reseating it and rebooting.
+20. **Fixed 2026-10-28 (eb9361c):** barge-in killed the voice thread. On a non-stop segment `BargeInStop` called `final()` (stop + close), then `reset()` → `cancel()` → `stop()` on the closed Moonshine stream; libmoonshine raised `ctypes.ArgumentError` (None handle). Any state other than IDLE/STOPPED counts as moving, and `describe` leaves the app in `DESCRIBE` (Phase 5 skills are stubs), so the first `describe` turn armed barge-in. The capture queue then dropped ~16.5k frames. `_MoonshineStream` now closes once. Regression test in `tests/test_voice.py`. Open design point for Phase 5: barge-in should follow actual wheel motion, not the state name.
