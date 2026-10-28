@@ -46,15 +46,20 @@ def split_sentences(text: str) -> list[str]:
     return [text] if text else []
 
 
-def play_wav(speaker: Any, path: str) -> None:
-    """Play a WAV file through the speaker HAL (wake/notify sounds)."""
+def play_wav(speaker: Any, path: str, wait: bool = True) -> None:
+    """Play a WAV file through the speaker HAL (wake/notify sounds).
+
+    ``wait=False`` queues it and returns at once: used for the "speak now" chime,
+    where the command may start before the chime has finished playing.
+    """
     import soundfile as sf
 
     data, rate = sf.read(str(path), dtype="int16")
     if getattr(data, "ndim", 1) > 1:
         data = data[:, 0]
     speaker.play(np.asarray(data, dtype=np.int16), int(rate))
-    _drain(speaker)
+    if wait:
+        _drain(speaker)
 
 
 class Tts(Protocol):

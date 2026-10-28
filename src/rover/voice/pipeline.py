@@ -305,13 +305,14 @@ class VoiceLoop:
             self.flush()
 
     def _begin_turn(self) -> None:
+        # Drop the buffered wake-word audio, then queue the chime without waiting:
+        # speaker delay + chime is ~0.6 s and a one-breath "Hey Rover, go to the
+        # cup" is already talking by then, so flushing after the chime clipped the
+        # command. The turn keeps the chime; VAD/STT see a short beep at its start.
+        self._flush()
         self.segmenter.reset()
         if self.speaker is not None and self.wake_sound:
-            play_wav(self.speaker, self.wake_sound)
-            # The chime plays through the listener; drop the audio buffered
-            # during it so the turn starts clean (no chime in the pre-roll).
-            self._flush()
-            self.segmenter.reset()
+            play_wav(self.speaker, self.wake_sound, wait=False)
         self._enter_recording()
 
     def _listen_again(self) -> None:

@@ -41,7 +41,7 @@ from rover.voice.tts import play_wav  # noqa: E402
 
 OUT_DIR = Path("bench/data/commands")
 PROMPT_GAP_S = 0.3  # silence between the spoken prompt and the chime
-CHIME_TAIL_S = 0.2  # let the chime finish before the wheels and the take start
+MOTOR_DELAY_S = 0.7  # wheels start after the chime is heard, so they cannot mask it
 
 EXTRA: list[tuple[str, str, str | None]] = [
     ("freeze", "stop", None),
@@ -101,6 +101,8 @@ def record_take(capture: AlsaCapture, rover, seconds: float, speed: float) -> np
     if rover is not None:
 
         def _spin() -> None:
+            if stop.wait(MOTOR_DELAY_S):
+                return
             while not stop.is_set():
                 rover.drive(-speed, speed)  # spin in place (wheels up)
                 time.sleep(0.1)
@@ -119,7 +121,7 @@ def record_take(capture: AlsaCapture, rover, seconds: float, speed: float) -> np
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--seconds", type=float, default=3.5)
+    parser.add_argument("--seconds", type=float, default=4.0)
     parser.add_argument("--yes", action="store_true", help="confirm wheels are off the ground")
     parser.add_argument(
         "--no-motors", action="store_true", help="record without spinning the wheels"
@@ -187,15 +189,14 @@ def main() -> int:
         )
 
     def guided_prompt(spoken: str, shown: str) -> None:
-        # Prompt, a gap, then the wake chime as the "speak now" cue. The gaps keep
-        # the chime from blending into the prompt's last word and from being masked
-        # by the wheels: from silence, play_wav() can return ~0.1 s before the chime
-        # ends. No long sleep after the cue, which would swallow a quick answer.
+        # Like the runtime turn: drop the prompt audio, queue the chime without
+        # waiting and start the take at once. Speaker delay + chime is ~0.6 s and a
+        # quick answer starts right after the beep, so waiting for it clipped the
+        # first word; the take keeps the chime (as runtime turns do).
         tts.say(spoken)
         time.sleep(PROMPT_GAP_S)
-        play_wav(tts.speaker, config.voice.wake_sound)
-        time.sleep(CHIME_TAIL_S)
-        capture.flush()  # drop the prompt + chime audio so it is not recorded
+        capture.flush()
+        play_wav(tts.speaker, config.voice.wake_sound, wait=False)
         print(shown, flush=True)
 
     try:

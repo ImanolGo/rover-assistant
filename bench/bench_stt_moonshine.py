@@ -272,6 +272,7 @@ def main() -> int:
     parser.add_argument("--contention", action="store_true")
     parser.add_argument("--limit", type=int, default=0, help="only the first N commands (0 = all)")
     parser.add_argument("--keyterms", action="store_true", help="bias Moonshine like rover.main")
+    parser.add_argument("--name", default=None, help="result name (default from --keyterms)")
     args = parser.parse_args()
     keyterms = None
     if args.keyterms:
@@ -321,7 +322,7 @@ def main() -> int:
 
     from common import write_result
 
-    name = "p4b_stt_moonshine_keyterms" if keyterms else "p4b_stt_moonshine"
+    name = args.name or ("p4b_stt_moonshine_keyterms" if keyterms else "p4b_stt_moonshine")
     print(write_result(name, results))
     return 0
 
