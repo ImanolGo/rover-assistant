@@ -12,6 +12,9 @@ Motors spin the wheels in place (wheels OFF the ground) so the recordings carry
 the same noise the runtime sees. ``--yes`` confirms wheels are raised.
 
 Keys per line: Enter = accept, r = redo, s = skip, q = quit.
+
+``--guided``: the robot speaks each prompt, then plays the wake chime; speak
+right after the chime (the take starts there).
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from rover.config import load_config  # noqa: E402
 from rover.hal.audio import AlsaCapture, normalize_int16  # noqa: E402
 from rover.hal.rover import RoverConfig, SerialRover  # noqa: E402
 from rover.voice.intents import classify  # noqa: E402
+from rover.voice.tts import play_wav  # noqa: E402
 
 OUT_DIR = Path("bench/data/commands")
 
@@ -181,9 +185,12 @@ def main() -> int:
         )
 
     def guided_prompt(spoken: str, shown: str) -> None:
+        # say()/play_wav() return once the sound has played (known issue 15), so
+        # recording starts right at the chime: no fixed sleep that would swallow
+        # the start of a quick answer (the 2026-10-28 takes lost their first words).
         tts.say(spoken)
-        time.sleep(0.8)
-        capture.flush()  # drop the prompt audio so it is not recorded
+        play_wav(tts.speaker, config.voice.wake_sound)  # "speak now" cue, as at runtime
+        capture.flush()  # drop the prompt + chime audio so it is not recorded
         print(shown, flush=True)
 
     try:
