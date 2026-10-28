@@ -20,7 +20,7 @@ import time
 import wave
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 import numpy as np
 
@@ -38,6 +38,7 @@ class AudioConfig:
     speaker_rate: int = 48000
     speaker_channels: int = 2
     frame_ms: int = 80
+    speaker_latency_s: float = 0.2  # sound-server/device delay after aplay (tune on robot)
 
     @property
     def frame_samples(self) -> int:
@@ -142,9 +143,17 @@ class AudioCapture(Protocol):
 
 
 class Speaker(Protocol):
-    """Plays float32 samples at ``rate``."""
+    """Plays float32 samples at ``rate``; ``play`` may return before the sound ends."""
 
     def play(self, samples: np.ndarray, rate: int) -> None: ...
+
+    def buffered_s(self) -> float:
+        """Seconds of written audio not yet heard."""
+        ...
+
+    def drain(self, cancelled: Callable[[], bool] | None = None) -> None:
+        """Block until written audio has played (or ``cancelled()``)."""
+        ...
 
     def close(self) -> None: ...
 
@@ -267,6 +276,11 @@ class NullSpeaker:
     def play(self, samples: np.ndarray, rate: int) -> None:
         self.played.append(np.asarray(samples))
 
+    def buffered_s(self) -> float:
+        return 0.0
+
+    def drain(self, cancelled: Callable[[], bool] | None = None) -> None: ...
+
     def close(self) -> None: ...
 
 
@@ -317,6 +331,11 @@ class AlsaSpeaker:
     name and stream raw 48 kHz stereo S16 to ``aplay -D pulse`` with
     ``PULSE_SINK`` set; with no sound server (headless) we fall back to the ALSA
     ``plughw`` device. ``aplay`` restarts once if the open races.
+
+    ``play()`` returns as soon as the pipe takes the data, long before it is
+    heard (pipe + aplay + sound-server buffering). A playback clock tracks when
+    the written audio will actually end; :meth:`drain` waits for it, so "done
+    speaking" means silent, not merely written.
     """
 
     def __init__(self, config: AudioConfig, device: str | None = None):
@@ -327,6 +346,7 @@ class AlsaSpeaker:
         )
         self._lock = threading.Lock()
         self._proc: subprocess.Popen | None = None
+        self._play_until = 0.0  # monotonic time the written audio finishes playing
         self._spawn()
 
     def _spawn(self) -> None:
@@ -366,11 +386,29 @@ class AlsaSpeaker:
                 try:
                     self._proc.stdin.write(pcm)
                     self._proc.stdin.flush()
+                    self._advance_clock(len(samples) / float(rate))
                     return
                 except (BrokenPipeError, OSError):
                     if attempt == 1:
                         raise
                     time.sleep(0.2)
+
+    def _advance_clock(self, duration_s: float) -> None:
+        now = time.monotonic()
+        if self._play_until <= now:  # idle: this clip starts after the output latency
+            self._play_until = now + self.config.speaker_latency_s
+        self._play_until += duration_s
+
+    def buffered_s(self) -> float:
+        """Seconds of written audio not yet heard."""
+        return max(0.0, self._play_until - time.monotonic())
+
+    def drain(self, cancelled: Callable[[], bool] | None = None) -> None:
+        """Block until everything written has played (or ``cancelled()`` is true)."""
+        while self.buffered_s() > 0.0:
+            if cancelled is not None and cancelled():
+                return
+            time.sleep(min(0.02, self.buffered_s()))
 
     def close(self) -> None:
         if self._proc is None:

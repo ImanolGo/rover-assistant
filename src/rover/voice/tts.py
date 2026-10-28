@@ -3,8 +3,11 @@
 The ``piper-tts`` Python API is used directly (no subprocess, no idle-timeout
 guessing about where a sentence ends): the voice is loaded once, its sample rate
 comes from the model's config, and each synthesized sentence is written to the
-speaker in ~80 ms blocks. A cancel flag is checked between blocks so ``stop``
-silences the robot promptly.
+speaker in ~80 ms blocks, keeping at most ``MAX_AHEAD_S`` queued ahead of what
+is audible. A cancel flag is checked between blocks, so ``stop`` silences the
+robot within ~0.25 s. ``say()`` and :func:`play_wav` return when the sound has
+**finished playing** (``speaker.drain``), not when it was written — the
+``speaking`` flag and the post-chime flush depend on that.
 
 The playback stream is opened at the *voice's* sample rate (mono), so no numpy
 resampling is needed on the audio path — PulseAudio/aplay handles the device
@@ -16,6 +19,7 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 from dataclasses import replace
 from typing import Any, Iterable, Protocol
 
@@ -23,6 +27,14 @@ import numpy as np
 
 _SENTENCE = re.compile(r"[^.!?]+[.!?]*")
 BLOCK_S = 0.08  # playback block size, for prompt cancellation
+MAX_AHEAD_S = 0.25  # audio queued beyond what is audible; bounds the cancel delay
+
+
+def _drain(speaker: Any, cancelled: Any = None) -> None:
+    """Wait for the speaker to go silent (fakes without a clock return at once)."""
+    drain = getattr(speaker, "drain", None)
+    if drain is not None:
+        drain(cancelled)
 
 
 def split_sentences(text: str) -> list[str]:
@@ -42,6 +54,7 @@ def play_wav(speaker: Any, path: str) -> None:
     if getattr(data, "ndim", 1) > 1:
         data = data[:, 0]
     speaker.play(np.asarray(data, dtype=np.int16), int(rate))
+    _drain(speaker)
 
 
 class Tts(Protocol):
@@ -86,7 +99,15 @@ class PiperTts:
     def _synthesize(self, sentence: str) -> Iterable[bytes]:
         return (chunk.audio_int16_bytes for chunk in self.voice.synthesize(sentence))
 
+    def _wait_for_room(self) -> None:
+        buffered = getattr(self.speaker, "buffered_s", None)
+        if buffered is None:
+            return
+        while buffered() > MAX_AHEAD_S and not self._cancel.is_set():
+            time.sleep(0.01)
+
     def say(self, text: str) -> None:
+        """Speak ``text``; returns when it has finished playing or was cancelled."""
         self._cancel.clear()
         for sentence in split_sentences(text):
             if self._cancel.is_set():
@@ -94,9 +115,11 @@ class PiperTts:
             for raw in self._synthesize(sentence):
                 samples = np.frombuffer(raw, dtype=np.int16)
                 for start in range(0, len(samples), self._block):
+                    self._wait_for_room()
                     if self._cancel.is_set():
                         return
                     self.speaker.play(samples[start : start + self._block], self.rate)
+        _drain(self.speaker, self._cancel.is_set)
 
     def close(self) -> None:
         speaker_close = getattr(self.speaker, "close", None)

@@ -191,6 +191,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         speaker_rate=int(audio_raw.get("speaker_rate", 48000)),
         speaker_channels=int(audio_raw.get("speaker_channels", 2)),
         frame_ms=int(audio_raw.get("frame_ms", 80)),
+        speaker_latency_s=float(audio_raw.get("speaker_latency_s", 0.2)),
     )
     perception = PerceptionConfig(
         engine=perception_raw.get("engine", "models/yolo_trt/yolo11n_fp16.engine"),

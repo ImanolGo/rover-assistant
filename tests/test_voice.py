@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
+import time
 import wave
 
 import httpx
 import numpy as np
 
-from rover.hal.audio import AudioConfig, NullSpeaker, drain_fd
+from rover.hal.audio import AlsaSpeaker, AudioConfig, NullSpeaker, drain_fd
 from rover.voice.stt import (
     FakeStt,
     GemmaStt,
@@ -18,7 +20,7 @@ from rover.voice.stt import (
     moonshine_arch,
     pcm16_to_wav_bytes,
 )
-from rover.voice.tts import FakeTts, PiperTts, play_wav, split_sentences
+from rover.voice.tts import MAX_AHEAD_S, FakeTts, PiperTts, play_wav, split_sentences
 from rover.voice.vad import FakeVad, SpeechSegmenter
 from rover.voice.wakeword import FakeWakeWord
 
@@ -295,3 +297,79 @@ def test_fake_tts_records_speech():
     tts.say("Hello there.")
     assert tts.spoken == ["Hello there."]
     tts.close()
+
+
+# --- playback clock: "finished" means heard, not written ---------------------
+
+
+class _FakeAplay:
+    def __init__(self):
+        self.stdin = io.BytesIO()
+
+    def poll(self):
+        return None
+
+
+def _clocked_speaker(monkeypatch, latency: float = 0.05) -> AlsaSpeaker:
+    monkeypatch.setattr(AlsaSpeaker, "_spawn", lambda self: setattr(self, "_proc", _FakeAplay()))
+    return AlsaSpeaker(AudioConfig(speaker_latency_s=latency), device="fake")
+
+
+def test_speaker_clock_counts_latency_once_and_queues_clips(monkeypatch):
+    speaker = _clocked_speaker(monkeypatch, latency=0.05)
+    assert speaker.buffered_s() == 0.0
+    clip = np.zeros(1600, dtype=np.int16)  # 0.1 s at 16 kHz
+    speaker.play(clip, 16000)
+    speaker.play(clip, 16000)  # back-to-back: no second latency
+    assert 0.2 < speaker.buffered_s() <= 0.25
+
+
+def test_speaker_drain_waits_for_playback_and_is_cancellable(monkeypatch):
+    speaker = _clocked_speaker(monkeypatch, latency=0.0)
+    speaker.play(np.zeros(3200, dtype=np.int16), 16000)  # 0.2 s
+    started = time.monotonic()
+    speaker.drain()
+    assert time.monotonic() - started >= 0.18
+    assert speaker.buffered_s() == 0.0
+
+    speaker.play(np.zeros(16000, dtype=np.int16), 16000)  # 1 s
+    started = time.monotonic()
+    speaker.drain(cancelled=lambda: True)
+    assert time.monotonic() - started < 0.1
+
+
+def test_piper_say_returns_only_after_audio_played(monkeypatch):
+    speaker = _clocked_speaker(monkeypatch, latency=0.05)
+    tts = PiperTts("unused", AudioConfig(), speaker=speaker, voice=_FakeVoice(samples=6615))
+    started = time.monotonic()
+    tts.say("A short sentence.")  # 0.3 s of audio
+    assert time.monotonic() - started >= 0.3
+    assert speaker.buffered_s() == 0.0
+
+
+def test_piper_say_keeps_little_audio_queued_ahead(monkeypatch):
+    speaker = _clocked_speaker(monkeypatch, latency=0.0)
+    ahead: list[float] = []
+    original = speaker.play
+
+    def spy(samples, rate):
+        original(samples, rate)
+        ahead.append(speaker.buffered_s())
+
+    speaker.play = spy
+    tts = PiperTts("unused", AudioConfig(), speaker=speaker, voice=_FakeVoice(samples=13230))
+    tts.say("Six tenths of a second.")
+    assert max(ahead) <= MAX_AHEAD_S + 0.09  # at most one block past the bound
+
+
+def test_play_wav_returns_after_the_chime_played(monkeypatch, tmp_path):
+    path = tmp_path / "chime.wav"
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(np.zeros(3200, dtype=np.int16).tobytes())  # 0.2 s
+    speaker = _clocked_speaker(monkeypatch, latency=0.0)
+    started = time.monotonic()
+    play_wav(speaker, str(path))
+    assert time.monotonic() - started >= 0.18

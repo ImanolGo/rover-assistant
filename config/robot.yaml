@@ -66,6 +66,7 @@ audio:
   speaker_rate: 48000
   speaker_channels: 2
   frame_ms: 80
+  speaker_latency_s: 0.2             # (tune) output delay after aplay; drain() waits for it
 
 voice:
   enabled: true                       # start the wake->VAD->STT listener (hardware)
