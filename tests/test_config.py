@@ -31,7 +31,7 @@ def test_load_real_config_maps_every_section():
     assert config.voice.wakeword_vad_threshold == pytest.approx(0.5)
     assert config.voice.speex_noise_suppression is True
     assert config.voice.stt_backend == "moonshine"
-    assert config.voice.moonshine_model == "tiny"
+    assert config.voice.moonshine_model == "small"
     assert config.voice.moonshine_vad_threshold == 0.01
     assert config.planner.url == "http://127.0.0.1:8080"
     assert config.api.port == 8000

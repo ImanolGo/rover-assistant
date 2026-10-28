@@ -72,7 +72,7 @@ class VoiceConfig:
     max_utterance_s: float = 10.0
     max_turn_s: float = 8.0
     stt_backend: str = "moonshine"
-    moonshine_model: str = "tiny"
+    moonshine_model: str = "small"
     moonshine_vad_threshold: float = 0.01
     tts_voice: str = "models/piper/en_US-lessac-medium.onnx"
     wake_sound: str = "assets/audio/notify_asc.wav"
@@ -233,7 +233,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         max_utterance_s=float(voice_raw.get("max_utterance_s", 10.0)),
         max_turn_s=float(voice_raw.get("max_turn_s", 8.0)),
         stt_backend=voice_raw.get("stt_backend", "moonshine"),
-        moonshine_model=voice_raw.get("moonshine_model", "tiny"),
+        moonshine_model=voice_raw.get("moonshine_model", "small"),
         moonshine_vad_threshold=float(voice_raw.get("moonshine_vad_threshold", 0.01)),
         tts_voice=voice_raw.get("tts_voice", VoiceConfig.tts_voice),
         wake_sound=voice_raw.get("wake_sound", VoiceConfig.wake_sound),

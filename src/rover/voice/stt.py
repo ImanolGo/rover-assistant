@@ -218,7 +218,7 @@ def make_stt(config: object, url: str, keyterms: list[str] | None = None) -> Stt
     """Build the configured backend: ``moonshine`` (default) or ``gemma``."""
     backend = getattr(config, "stt_backend", "moonshine")
     if backend == "moonshine":
-        model = getattr(config, "moonshine_model", "tiny")
+        model = getattr(config, "moonshine_model", "small")
         return MoonshineStt(
             moonshine_dir(model),
             arch=moonshine_arch(model),
