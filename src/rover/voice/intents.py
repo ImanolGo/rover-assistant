@@ -61,6 +61,9 @@ _SIMPLE: list[tuple[re.Pattern[str], str, str | None]] = [
     ),
 ]
 
+# Spoken for intents whose skill does not exist yet (Phase 5), so a turn never ends silent.
+NOT_YET = "I can't do that yet."
+
 _FOLLOW = re.compile(r"\bfollow\b(?:\s+(?P<rest>.+))?|\bcome\s+along\s+with\s+me\b", re.I)
 _DESCRIBE = re.compile(
     r"\b(what\s+do\s+you\s+see|what\s+can\s+you\s+see|describe|look\s+around"
@@ -165,7 +168,7 @@ def vocabulary(targets: Iterable[str] = ()) -> list[str]:
 
 def reply_templates() -> list[str]:
     """Every fixed reply the robot may speak (checked to contain no stop word)."""
-    return [response for _, _, response in _SIMPLE if response]
+    return [response for _, _, response in _SIMPLE if response] + [NOT_YET]
 
 
 def classify(text: str) -> Intent:
@@ -181,10 +184,12 @@ def classify(text: str) -> Intent:
 
     if match := _IS_THERE.search(lowered):
         target, attributes = _split_target(match.group("rest"))
-        return Intent(name="is_there", target=target, attributes=attributes, raw=raw)
+        return Intent(
+            name="is_there", target=target, attributes=attributes, response=NOT_YET, raw=raw
+        )
 
     if _DESCRIBE.search(lowered):
-        return Intent(name="describe", raw=raw)
+        return Intent(name="describe", response=NOT_YET, raw=raw)
 
     if match := _FOLLOW.search(lowered):
         rest = (match.group("rest") or "").strip()

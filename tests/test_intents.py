@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rover.voice.intents import Intent, classify, is_stop, strip_wake_phrase, vocabulary
+from rover.voice.intents import NOT_YET, Intent, classify, is_stop, strip_wake_phrase, vocabulary
 
 
 @pytest.mark.parametrize(
@@ -136,3 +136,8 @@ def test_intent_is_a_dataclass_with_raw_text():
     assert isinstance(intent, Intent)
     assert intent.raw == "turn left"
     assert intent.response == "Turning left."
+
+
+def test_unbuilt_skills_say_so():
+    for text in ("what do you see", "is there a red cup"):
+        assert classify(text).response == NOT_YET

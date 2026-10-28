@@ -25,6 +25,22 @@ from rover.perception.detector import Detector, make_detector
 from rover.perception.geometry import CameraGeometry
 from rover.voice.intents import Intent, classify
 
+# States whose skill drives the wheels: only these arm barge-in stop (and mute the wake
+# word). describe / is_there / unknown / COMMAND do not move, so the wake word stays on.
+# Phase 5: follow actual wheel commands instead of the state name.
+MOTION_STATES = frozenset(
+    {
+        "FORWARD",
+        "BACKWARD",
+        "TURN_LEFT",
+        "TURN_RIGHT",
+        "TURN_AROUND",
+        "RETURN_HOME",
+        "GO_TO",
+        "FOLLOW",
+    }
+)
+
 
 def select_source(config: RobotConfig) -> None:
     """In sim, replace the CSI backend (impossible on a laptop) with synthetic."""
@@ -191,7 +207,7 @@ class App:
                     speaking=lambda: loop.speaking,
                 )
             self._voice_loop = loop
-            loop.set_moving(self.state not in ("IDLE", "STOPPED"))
+            loop.set_moving(self.state in MOTION_STATES)
             self._voice_pump = pump
             self._voice_worker = worker
             worker.start()
@@ -220,7 +236,7 @@ class App:
         self.state = state
         loop = self._voice_loop
         if loop is not None:
-            loop.set_moving(state not in ("IDLE", "STOPPED"))
+            loop.set_moving(state in MOTION_STATES)
 
     def _on_barge_stop(self) -> None:
         print("voice: barge-in stop")
