@@ -16,8 +16,13 @@ time from the chime to the stop; a trial with no stop within ``--timeout`` is a 
 from __future__ import annotations
 
 import argparse
+import json
 import threading
 import time
+import wave
+from pathlib import Path
+
+import numpy as np
 
 from rover.config import load_config
 from rover.hal.audio import AlsaCapture, AlsaSpeaker
@@ -35,6 +40,7 @@ def main() -> int:
     parser.add_argument("--speed", type=float, default=0.30)
     parser.add_argument("--timeout", type=float, default=6.0, help="seconds after the cue")
     parser.add_argument("--yes", action="store_true", help="confirm wheels are off the ground")
+    parser.add_argument("--save", default=None, help="dir for per-trial WAV + event timeline")
     args = parser.parse_args()
     if not args.yes:
         raise SystemExit("Refusing to drive: pass --yes only with the wheels raised.")
@@ -87,10 +93,22 @@ def main() -> int:
             play_wav(speaker, voice.wake_sound, wait=False)
             cue = time.monotonic()
             print(f"[{trial}/{args.trials}] chime -> say 'stop'", flush=True)
+            audio, events = [], []
             while not stopped.is_set() and time.monotonic() - cue < args.timeout:
                 frame = capture.read_frame()
                 if frame is not None:
+                    audio.append(frame)
+                    had = len(streams)
                     barge.process(frame)
+                    t = round(time.monotonic() - cue, 3)
+                    if len(streams) > had:
+                        events.append((t, "vad_start", ""))
+                    if (
+                        streams
+                        and (text := streams[-1].partial())
+                        and (not events or events[-1][2] != text)
+                    ):
+                        events.append((t, "partial", text))
             elapsed = time.monotonic() - cue
             spinning.clear()
             spinner.join(timeout=0.5)
@@ -98,6 +116,16 @@ def main() -> int:
             heard = streams[-1].partial() if streams else ""
             ok = stopped.is_set()
             results.append((ok, elapsed if ok else None, heard))
+            if args.save:
+                out = Path(args.save)
+                out.mkdir(parents=True, exist_ok=True)
+                with wave.open(str(out / f"trial_{trial:02d}.wav"), "wb") as handle:
+                    handle.setnchannels(1)
+                    handle.setsampwidth(2)
+                    handle.setframerate(config.audio.mic_rate)
+                    handle.writeframes(np.concatenate(audio).astype(np.int16).tobytes())
+                row = {"trial": trial, "stopped": ok, "elapsed_s": round(elapsed, 3)}
+                (out / f"trial_{trial:02d}.json").write_text(json.dumps({**row, "events": events}))
             outcome = f"STOP  chime->stop {elapsed:.2f}s" if ok else f"miss  ({args.timeout:.0f}s)"
             print(f"   {outcome}  heard={heard!r}", flush=True)
             time.sleep(2.0)

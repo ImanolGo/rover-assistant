@@ -10,3 +10,4 @@ __pycache__/
 logs/
 bench/results/smoke_test.json
 bench/data/commands_*/
+bench/data/barge_*/
