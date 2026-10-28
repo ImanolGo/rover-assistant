@@ -126,7 +126,7 @@ class _MoonshineStream:
 
     def push(self, pcm: np.ndarray, sample_rate: int = 16000) -> str:
         self._stream.add_audio(to_float32(pcm).tolist(), sample_rate)
-        return self.partial or ""
+        return self.partial()
 
     def partial(self) -> str:
         return self._partials[-1].strip() if self._partials else ""

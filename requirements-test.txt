@@ -1,0 +1,15 @@
+# Laptop/CI test environment: everything `src/` imports at module level, without
+# the Jetson-only stack (torch, TensorRT, ultralytics, piper, openwakeword, moonshine).
+# CI and the laptop both install from this file; add an import here when tests need it.
+pytest
+ruff
+black
+numpy<2
+pyyaml
+pyserial
+fastapi
+uvicorn
+httpx
+opencv-python-headless
+psutil
+soundfile

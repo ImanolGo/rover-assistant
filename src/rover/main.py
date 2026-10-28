@@ -4,8 +4,8 @@ Phase 3 runs the perception loop and the debug API; voice (Phase 4) and the
 mission planner (Phase 5) plug into the same process later. This process owns
 the camera thread, the single CUDA context (YOLO) and the rover writer.
 
-    uv run rover              # Jetson / real hardware
-    ROVER_SIM=1 uv run rover  # laptop: synthetic frames + DryRunRover + API
+    uv run rover                # Jetson / real hardware
+    ROVER_SIM=1 .venv/bin/rover # laptop: synthetic frames + DryRunRover + API
 """
 
 from __future__ import annotations
@@ -67,6 +67,7 @@ class App:
         self._voice_loop: Any = None
         self._voice_pump: Any = None
         self._voice_worker: Any = None
+        self._tts: Any = None
         self._lock = threading.Lock()
         self._snapshot = VideoSnapshot(state=self.state)
         self._stop = threading.Event()
@@ -92,7 +93,7 @@ class App:
             return False
         self._last_t_capture = t_capture
         detections = self.detector.detect(frame)
-        now = time.time()
+        now = time.monotonic()
         if self._last_frame_time:
             self.fps = 1.0 / max(1e-3, now - self._last_frame_time)
         self._last_frame_time = now
@@ -120,10 +121,10 @@ class App:
     # --- voice listener ------------------------------------------------------
 
     def start_voice(self) -> None:
-        self._voice_thread = threading.Thread(target=self._voice_loop, name="voice", daemon=True)
+        self._voice_thread = threading.Thread(target=self._run_voice, name="voice", daemon=True)
         self._voice_thread.start()
 
-    def _voice_loop(self) -> None:
+    def _run_voice(self) -> None:
         try:
             from rover.hal.audio import AlsaCapture, AlsaSpeaker
             from rover.voice.intents import vocabulary
@@ -158,6 +159,7 @@ class App:
             keyterms = vocabulary(self.config.perception.target_classes_h_stop.keys())
             stt = make_stt(voice, self.config.planner.url, keyterms=keyterms)
             tts = PiperTts(voice.tts_voice, self.config.audio)
+            self._tts = tts
             worker = ThreadedWorker(
                 stt, tts=tts, on_intent=self._on_intent, on_transcript=self._on_transcript
             )
@@ -278,6 +280,8 @@ class App:
 
     def stop(self) -> None:
         self.rover.stop()
+        if self._tts is not None:
+            self._tts.cancel()  # stop also silences the robot mid-sentence
         self._set_state("STOPPED")
         self.left = self.right = 0.0
         with self._lock:

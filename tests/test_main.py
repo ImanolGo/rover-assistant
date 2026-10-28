@@ -142,3 +142,28 @@ def test_empty_command_is_rejected():
         assert app.state == "COMMAND"
     finally:
         app.close()
+
+
+def test_start_voice_runs_the_voice_loop(monkeypatch):
+    import threading
+
+    ran = threading.Event()
+    monkeypatch.setattr(App, "_run_voice", lambda self: ran.set())
+    app = App(_sim_config(), detector=FakeDetector())
+    try:
+        app.start_voice()
+        assert ran.wait(2.0), "voice thread did not run the listener"
+    finally:
+        app.close()
+
+
+def test_stop_cancels_speech():
+    from rover.voice.tts import FakeTts
+
+    app = App(_sim_config(), detector=FakeDetector())
+    try:
+        app._tts = FakeTts()
+        app.stop()
+        assert app._tts.cancelled is True
+    finally:
+        app.close()

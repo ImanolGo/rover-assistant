@@ -206,7 +206,7 @@ class SerialRover:
     def drive(self, left: float, right: float) -> None:
         with self._lock:
             self._target = (_limit_command(left, self.config), _limit_command(right, self.config))
-            self._target_time = time.time()
+            self._target_time = time.monotonic()
 
     def stop(self) -> None:
         with self._lock:
@@ -279,7 +279,7 @@ class SerialRover:
         while not self._closing.is_set():
             with self._lock:
                 left, right = self._target
-                fresh = (time.time() - self._target_time) < self.config.watchdog_s
+                fresh = (time.monotonic() - self._target_time) < self.config.watchdog_s
             if not fresh:
                 left = right = 0.0
             self._send({"T": 1, "L": left, "R": right})

@@ -56,7 +56,7 @@ def test_camera_returns_latest_frame_from_source():
     try:
         frame, t_capture = camera.latest()
         assert frame.shape == (2, 2, 3)
-        assert t_capture <= time.time()
+        assert t_capture <= time.monotonic()
     finally:
         camera.close()
 

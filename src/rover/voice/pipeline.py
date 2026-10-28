@@ -11,10 +11,11 @@ Two layers:
   overruns), and when the listener is behind the oldest frames are dropped and
   counted rather than letting stale audio swallow the next wake word.
 
-Continuation note: the inline path keeps a turn open when a transcript is only
-the wake phrase ("Hey Rover" ... pause ... command). The threaded path does not
-(it would need STT in the listener); say "Hey Rover, <command>" in one breath,
-or wake again. Barge-in / stop-without-wake is deferred (C3, C6).
+Both paths keep a turn open when a transcript is only the wake phrase ("Hey
+Rover" ... pause ... command): inline directly, threaded via the worker's
+``on_empty`` -> :meth:`VoiceLoop.arm_continuation`. While the robot moves and
+STT streams (Moonshine), :class:`BargeInStop` catches "stop" without a wake word.
+A spoken stop reaches ``on_intent`` before its acknowledgement is spoken.
 """
 
 from __future__ import annotations
@@ -164,6 +165,8 @@ class ThreadedWorker:
                     self.on_empty(deadline)
                 continue
             intent = classify(clean)
+            if intent.name == "stop" and self.on_intent is not None:
+                self.on_intent(intent)  # wheels first; "Stopping." comes after
             if self.tts is not None and intent.response:
                 if self.on_speaking is not None:
                     self.on_speaking(True)
@@ -172,7 +175,7 @@ class ThreadedWorker:
                 finally:
                     if self.on_speaking is not None:
                         self.on_speaking(False)
-            if self.on_intent is not None:
+            if intent.name != "stop" and self.on_intent is not None:
                 self.on_intent(intent)
 
     def close(self) -> None:

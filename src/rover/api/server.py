@@ -185,14 +185,14 @@ def mjpeg_stream(
     period = 1.0 / fps if fps > 0 else 0.0
     produced = 0
     while max_frames is None or produced < max_frames:
-        started = time.time()
+        started = time.monotonic()
         frame = annotate(context.snapshot())
         jpeg = encode_jpeg(frame)
         if jpeg:
             yield b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg + b"\r\n"
         produced += 1
         if max_frames is None:
-            delay = period - (time.time() - started)
+            delay = period - (time.monotonic() - started)
             if delay > 0:
                 time.sleep(delay)
 
@@ -200,7 +200,7 @@ def mjpeg_stream(
 def create_app(context: ApiContext) -> FastAPI:
     """Build the FastAPI app bound to ``context``."""
     app = FastAPI(title="rover-assistant", version="0.1.0")
-    started = time.time()
+    started = time.monotonic()
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -210,7 +210,7 @@ def create_app(context: ApiContext) -> FastAPI:
     def status() -> dict[str, Any]:
         data: dict[str, Any] = {
             "status": "ok",
-            "uptime_s": round(time.time() - started, 1),
+            "uptime_s": round(time.monotonic() - started, 1),
             "resources": resource_snapshot(),
         }
         data.update(context.status())

@@ -103,7 +103,7 @@ class CsiSource:
             frame = bgrx_to_bgr(bytes(info.data), width, height)
         finally:
             buffer.unmap(info)
-        return frame, time.time()
+        return frame, time.monotonic()
 
     def close(self) -> None:
         self._pipeline.set_state(self._gst.State.NULL)
@@ -123,7 +123,7 @@ class UsbSource:
         ok, frame = self._capture.read()
         if not ok:
             return None
-        return frame, time.time()
+        return frame, time.monotonic()
 
     def close(self) -> None:
         self._capture.release()
@@ -154,11 +154,11 @@ class FileSource:
             if not ok:
                 self._video.set(self._cv2.CAP_PROP_POS_FRAMES, 0)
                 ok, frame = self._video.read()
-            return (frame, time.time()) if ok else None
+            return (frame, time.monotonic()) if ok else None
         frame = self._cv2.imread(str(self._images[self._index % len(self._images)]))
         self._index += 1
         time.sleep(1.0 / self.config.fps)  # pace a folder like a camera
-        return (frame, time.time()) if frame is not None else None
+        return (frame, time.monotonic()) if frame is not None else None
 
     def close(self) -> None:
         if self._video is not None:
@@ -174,11 +174,11 @@ class SyntheticSource:
 
     def __init__(self, config: CameraConfig | None = None):
         self.config = config or CameraConfig()
-        self._t0 = time.time()
+        self._t0 = time.monotonic()
 
     def read(self) -> tuple[np.ndarray, float] | None:
         width, height = self.config.output
-        elapsed = time.time() - self._t0
+        elapsed = time.monotonic() - self._t0
         frame = np.empty((height, width, 3), dtype=np.uint8)
         frame[:, :] = (40, 30, 20)
         box_w = max(6, width // 7)
@@ -187,7 +187,7 @@ class SyntheticSource:
         box_y = int((0.5 + 0.35 * math.cos(elapsed * 0.9)) * max(1, height - box_h))
         frame[box_y : box_y + box_h, box_x : box_x + box_w] = (0, 0, 200)
         time.sleep(1.0 / self.config.fps if self.config.fps else 0.0)
-        return frame, time.time()
+        return frame, time.monotonic()
 
     def close(self) -> None: ...
 
@@ -205,7 +205,7 @@ class FakeSource:
             return None
         frame = self._frames[self._index % len(self._frames)]
         self._index += 1
-        return frame, time.time()
+        return frame, time.monotonic()
 
     def close(self) -> None:
         self.closed = True
@@ -237,8 +237,8 @@ class Camera:
 
     def latest(self, timeout: float = 2.0) -> tuple[np.ndarray, float]:
         """Newest ``(frame, t_capture)``; raise TimeoutError if none arrives."""
-        deadline = time.time() + timeout
-        while time.time() < deadline:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
             with self._lock:
                 if self._frame is not None:
                     return self._frame, self._t_capture

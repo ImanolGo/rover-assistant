@@ -11,8 +11,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - run: pip install ruff black pytest
-      - run: ruff check src bench
-      - run: black --check src bench
-      - run: pip install -e . --no-deps && pip install numpy pyyaml pyserial fastapi uvicorn httpx opencv-python-headless
+      - run: pip install -r requirements-test.txt && pip install -e . --no-deps
+      - run: ruff check src bench tests
+      - run: black --check src bench tests
       - run: pytest -q

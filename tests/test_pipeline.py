@@ -352,3 +352,31 @@ def test_threaded_path_continues_after_a_lone_wake_word():
         worker.close()
     assert [intent.name for intent in intents] == ["go_to"]
     assert intents[0].target == "kitchen"
+
+
+def _run_worker_turn(text: str) -> list[str]:
+    """Run one turn through a ThreadedWorker and return the ordered events."""
+    events: list[str] = []
+
+    class OrderTts(FakeTts):
+        def say(self, text: str) -> None:
+            events.append("say")
+
+    worker = ThreadedWorker(
+        FakeStt(text), tts=OrderTts(), on_intent=lambda i: events.append(f"intent:{i.name}")
+    )
+    worker.start()
+    worker.submit(np.ones(1280, dtype=np.int16))
+    deadline = time.monotonic() + 2.0
+    while len(events) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    worker.close()
+    return events
+
+
+def test_worker_stops_before_speaking_the_acknowledgement():
+    assert _run_worker_turn("stop") == ["intent:stop", "say"]
+
+
+def test_worker_speaks_before_acting_on_motion_intents():
+    assert _run_worker_turn("turn left") == ["say", "intent:turn_left"]
