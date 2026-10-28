@@ -40,6 +40,8 @@ from rover.voice.intents import classify  # noqa: E402
 from rover.voice.tts import play_wav  # noqa: E402
 
 OUT_DIR = Path("bench/data/commands")
+PROMPT_GAP_S = 0.3  # silence between the spoken prompt and the chime
+CHIME_TAIL_S = 0.2  # let the chime finish before the wheels and the take start
 
 EXTRA: list[tuple[str, str, str | None]] = [
     ("freeze", "stop", None),
@@ -117,7 +119,7 @@ def record_take(capture: AlsaCapture, rover, seconds: float, speed: float) -> np
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--seconds", type=float, default=3.0)
+    parser.add_argument("--seconds", type=float, default=3.5)
     parser.add_argument("--yes", action="store_true", help="confirm wheels are off the ground")
     parser.add_argument(
         "--no-motors", action="store_true", help="record without spinning the wheels"
@@ -185,11 +187,14 @@ def main() -> int:
         )
 
     def guided_prompt(spoken: str, shown: str) -> None:
-        # say()/play_wav() return once the sound has played (known issue 15), so
-        # recording starts right at the chime: no fixed sleep that would swallow
-        # the start of a quick answer (the 2026-10-28 takes lost their first words).
+        # Prompt, a gap, then the wake chime as the "speak now" cue. The gaps keep
+        # the chime from blending into the prompt's last word and from being masked
+        # by the wheels: from silence, play_wav() can return ~0.1 s before the chime
+        # ends. No long sleep after the cue, which would swallow a quick answer.
         tts.say(spoken)
-        play_wav(tts.speaker, config.voice.wake_sound)  # "speak now" cue, as at runtime
+        time.sleep(PROMPT_GAP_S)
+        play_wav(tts.speaker, config.voice.wake_sound)
+        time.sleep(CHIME_TAIL_S)
         capture.flush()  # drop the prompt + chime audio so it is not recorded
         print(shown, flush=True)
 
