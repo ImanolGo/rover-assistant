@@ -1,7 +1,7 @@
 # STATUS.md
 
 **Current phase:** pre-5 fix pass (audit 2026-10-28) → then 5 — Brain: planner, skills, state machine
-**Last updated:** 2026-10-28 (audit fixes: voice wiring, monotonic watchdog, stop ordering, CI deps; base 0b666f9)
+**Last updated:** 2026-10-28 (audit fixes; audio stream + chime fixes; B1 real-mic benchmark, Moonshine VAD drift fix; f18dd6c)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -12,7 +12,7 @@
 | 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = Gemma audio at the time (**superseded 2026-10-02: Moonshine tiny streaming is the default**, see §Phase 4 voice v2); whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
 | 2 HAL | ✅ | ☑ camera ☑ geometry ☑ rover ☑ audio ☑ hw: camera / audio (3/3) / rover | ⚠ "cap 0.15" motions actually ran at **0.30** (deadband raised every nonzero command; cap now 0.35, Known issue 13). 45 laptop tests green; all three `hardware_tests/` ran on the robot (2026-10-01). Camera 30.0 fps, audio through the UACDemo sink, rover wheels-up motions + watchdog pass, gyro bias calibrated per boot. See §Phase 2 HAL. |
 | 3 Perception | 🔄 | ☑ tracker ☑ bearing sign ☑ API/video ☑ §10 camera/perception/brain-CPU · ☐ detector→motor p90 (Phase 5) | YOLO11n TRT + ByteTrack stable ids, correct bearing sign, 27–34 fps in-process; FastAPI + dashboard; `ROVER_SIM=1` synthetic sim; 78 laptop tests. See §Phase 3 Perception. |
-| 4 Voice | 🔄 | ☑ wake ☑ VAD ☑ STT ☑ TTS ☑ intents ≥90% (synthesized) · ☐ bench the B1 real-mic recordings · ☐ re-verify through `rover` | **2026-10-28:** voice never started inside `rover` from 7e3e8d9 to the audit fix (Known issue 14), so the default path (Moonshine + threaded worker + barge-in) has not yet run on hardware. Exit criterion was met on Piper-synthesized audio only (deviation logged); the B1 real-mic takes were recorded on the robot 2026-10-02 but not yet run through the bench. Earlier: live on hardware via `hardware_tests/test_voice.py` (inline path, Gemma STT): "Hey Rover …" → transcript → intent (`go_to`/`describe`). 20-command bench **18/20 = 90%** intents, p50 0.56 s end-of-speech → intent (Piper-synthesized audio; 1.10 mic recordings pending). Wired into `rover.main`. See §Phase 4 Voice. |
+| 4 Voice | 🔄 | ☑ wake ☑ VAD ☑ STT ☑ TTS ☑ intents ≥90% (synthesized) · ☑ B1 real-mic benchmark (quiet + motors) · ☐ STT model choice (tiny → small?) · ☐ re-verify through `rover` | **B1 done 2026-10-28** (§Phase 4 voice v4): on real audio Moonshine small ≈ Gemma for commands, tiny clearly worse; spoken stop reliable only within a few metres, worse with the wheels running (Known issue 18); libmoonshine VAD drift found and fixed (Known issue 17). **2026-10-28:** voice never started inside `rover` from 7e3e8d9 to the audit fix (Known issue 14), so the default path (Moonshine + threaded worker + barge-in) has not yet run on hardware. Exit criterion was met on Piper-synthesized audio only (deviation logged); the B1 real-mic takes were recorded on the robot 2026-10-02 but not yet run through the bench. Earlier: live on hardware via `hardware_tests/test_voice.py` (inline path, Gemma STT): "Hey Rover …" → transcript → intent (`go_to`/`describe`). 20-command bench **18/20 = 90%** intents, p50 0.56 s end-of-speech → intent (Piper-synthesized audio; 1.10 mic recordings pending). Wired into `rover.main`. See §Phase 4 Voice. |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
 | 6 Field | ⏳ | ☐ go_to ≥70% ☐ follow ≥4/5 ☐ describe ≥15/20 ☐ soak | |
 | 7 Deploy | ⏳ | ☐ systemd ☐ doctor ☐ cold boot | |
@@ -198,9 +198,91 @@ it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
 - 30-min soak (criterion b): **done** (`p6_soak_tiny.json`).
 - Real-mic recordings (B1): recorded 2026-10-02 on the robot (48 labelled takes in `bench/data/commands/`, Jetson only — WAVs are gitignored). **Benchmarked 2026-10-28 and found invalid:** `record_commands.py --guided` speaks each prompt and records after 0.8 s, but playback is still running (Known issue 15), so the takes contain the robot's own prompt — command takes transcribe as the phrase twice ("Turn left. Turn left."), and 19/20 stop takes start with the prompt tail "…a little further away" with the human "stop" after it. Mic numbers (tiny acc 0.50 / stop 0.24, small 0.62 / 0.48, p50 ~20 ms because the 4 s takes end in silence) measure the recording, not the STT. **Re-record** without `--guided`, or after the playback-drain fix.
 - **Keyterms (runtime bias) on the synthesized set** (`bench_stt_moonshine.py --keyterms`, 2026-10-28, commit da0fcf6, MAXN SUPER, idle; `p4b_stt_moonshine_keyterms.json`): tiny acc 1.00, stop recall 1.00, p50 0.24 / p90 0.31 s, 33% CPU, 152 MB; small acc 1.00, p90 0.70 s, 53% CPU, 371 MB. **Correction (same day): this is run-to-run noise, not a keyterms gain.** A repeat run at 1584409 gave tiny+keyterms 0.85 / stop 0.00 and tiny without keyterms 0.90 / 0.50: Moonshine streaming output varies between runs ("halt" → "Holt" / "Okay" / "Halt"), and the synthesized set has only 2 stop items, so ±1–2 items swing accuracy by 0.05–0.10 and stop recall by 0.5. The synthesized set cannot separate tiny / small / keyterms; the real-mic set (20 stop takes) must.
-- **Second real-mic set (2026-10-28 ~11:00, wheels up, motors 0.30) — also invalid, opposite cause:** after the playback fix the recorder still slept 0.8 s and flushed after the prompt, discarding the start of the operator's immediate answer ("reverse" → "First.", "turn left"/"freeze"/"cancel" → empty). Mic accuracy 0.21–0.44 for every candidate and ~6 ms latencies reflect truncated takes. Recorder fixed (prompt → wake chime → record at once); result files on the Jetson reverted to the committed versions. Third recording pending. Gemma baseline not re-run (llama-server could not load: Known issue 12, sudo needed).
+- **Second real-mic set (2026-10-28 ~11:00, wheels up, motors 0.30) — also invalid, opposite cause:** after the playback fix the recorder still slept 0.8 s and flushed after the prompt, discarding the start of the operator's immediate answer ("reverse" → "First.", "turn left"/"freeze"/"cancel" → empty). Mic accuracy 0.21–0.44 for every candidate and ~6 ms latencies reflect truncated takes. Recorder fixed (prompt → wake chime → record at once); result files on the Jetson reverted to the committed versions. Valid sets recorded and benchmarked later the same day: §Phase 4 voice v4. Gemma baseline not re-run (llama-server could not load: Known issue 12, sudo needed).
 - On the 6-command contention set, **"stop" was transcribed as "Top" by both Gemma and Moonshine tiny** (`p4b_stt_moonshine.json`). Stop recall is the safety-critical number; B1 must report it separately, and `set_keyterms` should be tried on it.
 - `bench_wake.py` motor-noise before/after: pending motor-noise audio.
+
+### Phase 4 voice v4 — B1 real-mic benchmark + audio fixes (Jetson, 2026-10-28)
+
+**Audio path fixes (commits a94e37d, d013c35, 5865aa3).**
+- **Continuous speaker stream.** A lone short clip (the 0.26 s wake chime) was held by the
+  idle aplay/PulseAudio stream and played only when the next sound arrived (operator: "the
+  beep comes after the wheels stop"). `AlsaSpeaker` now runs one feeder thread that writes
+  queued PCM or silence in 20 ms chunks, paced on the monotonic clock (lead 0.15 s, aplay
+  `-B` 120 ms). Operator check: chime prompt, sentences smooth, no idle hiss.
+- **Measured play() → mic delay** (click test, 2026-10-28): median **0.36 s**, range
+  0.32–0.53 s on the TTS speaker; ~0.45 s on the 48 kHz stereo path. `latency_s` = lead +
+  `audio.speaker_latency_s` (0.2) = 0.35 s.
+- **Runtime chime regression fixed.** `VoiceLoop._begin_turn` flushed the turn audio *after*
+  draining the chime, which clipped one-breath commands; it now flushes the wake-word audio
+  first, queues the chime without waiting, and keeps it in the turn.
+- **Recorder** (`bench/record_commands.py --guided`): same chime cue as runtime; motors
+  start 0.7 s after it (so the wheels cannot mask the beep); 4 s takes; the mic is read and
+  discarded while the prompt plays (an unread arecord pipe backed up ~2 s and leaked the
+  prompt tail "…further away" into 18/20 stop takes). Four bad sets are archived on the
+  Jetson (`bench/data/commands_2026-10-*_{contaminated,truncated,clipped_motors,quiet_leak}`).
+- The `bench_playback.py` re-run after the continuous stream was **not recorded**: the mic
+  noise floor doubled (p90 ~230 vs ~100) and the RMS-threshold method became unreliable.
+  `p4c_playback_timing.json` stays the a861c5c result.
+
+**B1 sets** (Jetson, guided, one operator; WAVs gitignored):
+`bench/data/commands_2026-10-28_quiet` (no motors) and `…_motors` (wheels **up**,
+spinning in place at 0.30). Each has 48 takes: 28 commands, then 20 "stop" takes with the
+operator stepping back each time, from ~1 m to **~7 m** at the last take.
+
+**Moonshine VAD drift (Known issue 17).** libmoonshine 0.1.5 runs its own Silero VAD
+whose state lives for the whole process. At the default threshold it gates out more and
+more quiet speech: the same far take transcribed 4× in one process gave "Stop", "Stop.",
+"", "". After that even near stops came back empty. A new `Transcriber`, a new stream,
+`identify_speakers=false` and `transcribe_without_streaming` all failed to reset it; only
+a fresh process did. So the first Moonshine runs on these sets (`p4b_stt_mic_{quiet,motors}.json`,
+`*_keyterms.json`, commit 5865aa3) depended on run order and are **invalid for Moonshine**
+(their Gemma rows are valid). Fix (df93602): `voice.moonshine_vad_threshold: 0.01` → the
+Transcriber (0 is not "off": it dropped even near takes). Our own VAD/segmenter frames
+the turns anyway. The STT bench now spawns one process per Moonshine candidate. With 0.01,
+26 clips in one process stayed stable.
+
+**Results** (`bench/bench_stt_moonshine.py --dataset mic`, MAXN SUPER, idle; Gemma at
+5865aa3, Moonshine at df93602 with the VAD fix, isolated). Cmds = intents correct of the 28
+command takes; stop = recall over the 20 distance takes plus the stop-labelled commands:
+
+| Candidate | quiet acc | quiet cmds | quiet stop | motors acc | motors cmds | motors stop | CPU | RSS Δ |
+|---|---|---|---|---|---|---|---|---|
+| Gemma audio | **0.79** | 24/28 | **0.68** | **0.54** | 16/28 | **0.52** | 2% | (llama-server) |
+| Moonshine tiny | 0.48 | 19/28 | 0.24 | 0.35 | 15/28 | 0.08 | 15% | 133 MB |
+| Moonshine small | 0.67 | 24/28 | 0.44 | 0.48 | 20/28 | 0.16 | 25% | 372 MB |
+| Moonshine medium | 0.62 | **26/28** | 0.28 | 0.52 | **21/28** | 0.20 | 33% | 709 MB |
+| small + keyterms | 0.69 | 25/28 | 0.48 | 0.50 | 21/28 | 0.16 | 25% | 377 MB |
+
+Files: `p4b_stt_mic_{quiet,motors}.json` (Gemma), `p4b_stt_mic_{quiet,motors}_vad.json`,
+`…_vad_keyterms.json`. Latency is end of take → final text: Moonshine p50 10–20 ms,
+Gemma ~0.41 s. The 4 s takes end in silence, so Moonshine has usually finalized before
+the end. That understates its live latency; the synthesized-set numbers in §Phase 4
+voice v2 (tiny p90 0.18 s) are the realistic ones.
+
+Findings:
+- **Commands:** Moonshine small/medium match Gemma when quiet (24–26 vs 24 of 28) and beat
+  it with wheel noise (20–21 vs 16). **Tiny is clearly worse** on real audio; the
+  synthesized-set tie (0.90 = 0.90) did not hold.
+- **Stop by distance:** every model hears the near takes. Moonshine small gets the first
+  ~9 of 20 when quiet and ~5 with the motors, then returns **empty** transcripts. Gemma gets
+  the first 12 when quiet and 8 with the motors. A spoken stop is therefore reliable only
+  within a few metres (the exact range was not measured per take), and much less so while
+  the wheels run. The `/stop` endpoint and the 0.5 s watchdog remain the safety guarantee
+  (Known issue 18).
+- **Keyterms:** +0–2 takes of 48, within noise. Kept on, but no reason to rely on them.
+- **Mic gain is not the fix.** USB PnP mic at Mic Capture Volume 13/16 (+19 dB), Auto Gain
+  Control on. Raw room noise scales with the gain (RMS 34 / 56 / 92 at volume 10 / 13 / 16, AGC
+  off), so the noise is acoustic/analog, not quantisation. Cutting the chime and
+  renormalising the far takes did not help Moonshine either. Better pickup needs hardware
+  (an array or conference mic, mounted away from the fan). AGC on vs off was not A/B tested
+  with speech.
+- **The wake chime does not hurt recognition:** every take contains it, as runtime turns do.
+
+**Not decided here:** `voice.moonshine_model` stays `tiny` until the operator chooses.
+The data favours **small** (+239 MB vs tiny; the soak floor would drop from ~729 MB to an
+estimated ~490 MB, still ≥ 350 MB but unmeasured, so it needs a 30-min soak). It also
+favours a Gemma second opinion for stop while moving.
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
@@ -338,6 +420,10 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-28 | **Speed cap 0.15 → 0.35; deadband rounds to 0 or the floor** (operator decision) | the 0.30 deadband floor made 0.15 unreachable — every nonzero command left the HAL at ±0.30, so all hardware motion so far ran at 0.30. Now: \|cmd\| < 0.15 → 0, 0.15–0.30 → 0.30, 0.30–0.35 proportional; `v_max` 0.35. AGENTS.md rule 4, ARCHITECTURE §8 and PLAN Phase 5 exit updated; hardware test / record defaults 0.30 (= what physically ran before) | `tests/test_rover.py` |
 | 2026-10-28 | B1 real-mic set **rejected as contaminated**; re-record needed | the guided recorder's TTS prompt is still playing when the take starts (`say()` returns at pipe write, not playback end); transcripts show the prompt in nearly every take. (The 'keyterms lift tiny to 1.00' note was run-to-run noise — see §Phase 4 voice v3.) A second set the same day was truncated by the recorder's 0.8 s post-prompt flush; recorder now cues with the wake chime | `p4b_stt_moonshine_keyterms.json`; transcripts inspected per take |
 | 2026-10-28 | **`say()` / `play_wav()` wait for playback to end** (Known issue 15) | `AlsaSpeaker` keeps a playback clock (written duration + `audio.speaker_latency_s` 0.2 once per idle start) with a cancellable `drain()`; `say()` keeps ≤ 0.25 s of audio queued beyond the latency, so `cancel()` cuts in within ~0.45 s. First version paced on the clock *including* latency, which starved the stream — speech audibly cut out on the robot (operator report) — fixed in a861c5c; the operator confirmed smooth playback after it. Measured: say() returns **+0.024 / +0.036 / +0.052 s after** the mic stops hearing the speaker (3/3 not early; mic capture lag makes the true margin larger). Re-verify Known issue 10 (chime flush) on the next `rover` voice run | `bench/bench_playback.py` → `p4c_playback_timing.json` (2026-10-28, commit a861c5c+bench, MAXN SUPER) |
+| 2026-10-28 | **Continuous speaker stream** (`AlsaSpeaker` feeder thread writes PCM or silence) | a lone short clip was held by the idle aplay/pulse stream and played late; `aplay -R` did not help. Operator verified prompt chime, smooth speech, no hiss. Measured play() → mic median 0.36 s | §Phase 4 voice v4; `tests/test_voice.py` clocked-speaker tests |
+| 2026-10-28 | **Wake chime: flush first, queue without waiting, keep it in the turn** (runtime + recorder) | flushing after the drained chime clipped one-breath commands; recognition on takes containing the chime is unaffected | §Phase 4 voice v4; `tests/test_pipeline.py` |
+| 2026-10-28 | **`voice.moonshine_vad_threshold: 0.01`**; STT bench isolates each Moonshine candidate in its own process | libmoonshine's built-in VAD state outlives the Transcriber and drifts deaf at its default threshold (same take "Stop" → "" after two passes); 0.01 stayed stable over 26 clips; 0 breaks it. Small on the quiet set 0.44 → 0.67 acc, stop 0.16 → 0.44 | Known issue 17; `p4b_stt_mic_*_vad.json` (df93602) |
+| 2026-10-28 | **B1 real-mic result recorded; the B3 "tiny" choice is not confirmed** | real audio: tiny 0.48 / 0.35 acc (quiet / motors) vs small 0.67 / 0.48 and Gemma 0.79 / 0.54; small/medium ≈ Gemma on commands, Gemma best on distant stops. Model switch left to the operator (small needs a soak) | §Phase 4 voice v4 |
 | 2026-10-28 | `planner.mode` default → `completion_fewshot` | matches the bench 1.9 decision (90% vs 83%); the config still said `jinja_tools` | bench 1.9 row above |
 
 ## Known issues
@@ -357,3 +443,5 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 14. Voice did not start inside `rover` from 7e3e8d9 until the 2026-10-28 fix (attribute shadowed the thread target; no error, no log). Everything voice-related after that commit was verified via benches / `hardware_tests/test_voice.py` (inline path, Gemma STT) only — re-verify through `rover` on hardware.
 15. **Fixed 2026-10-28 (commits ab2b5a7, a861c5c; decision log).** Was: **`tts.say()` / `play_wav()` return before the sound finishes.** `AlsaSpeaker.play()` writes into a persistent `aplay` pipe and returns when the pipe accepts the data; pipe + aplay + PulseAudio buffering leaves ~1 s or more still to play. Effects: the `speaking` flag that suppresses barge-in self-triggering clears early; the post-chime flush runs while the chime is still audible (so Known issue 10's fix is likely incomplete); the guided B1 recordings captured the prompts. Fix: have `play()` (or `say()`) wait until the written duration has elapsed since playback start (or drain aplay), then verify on hardware.
 16. `scripts/llama_up.sh` uses `sudo -n` and silently skips stopping ollama/jtop when passwordless sudo is not configured (the case on this Jetson, 2026-10-28) — it then fails 4× with no hint (see Known issue 12). Either configure passwordless sudo for those commands or disable ollama/jtop at boot (operator decision). **Resolved 2026-10-28:** ollama + jtop disabled at boot (`systemctl disable --now`). Stopping them alone left CmaFree at 8 MB; `drop_caches` + `compact_memory` (sudo) raised it to **218 MB** and llama-server loaded on attempt 1 (42 MB CMA free after load). The cache drop still needs sudo after heavy file I/O (Known issue 1).
+17. **libmoonshine VAD drift** (moonshine-voice 0.1.5): the library's built-in VAD keeps state for the whole process. At its default threshold, quiet speech is increasingly dropped: the same far "stop" goes "Stop" → "" within two passes, and later even near takes come back empty. A new Transcriber, a new stream, `identify_speakers=false` and `transcribe_without_streaming` do not reset it. **Mitigated 2026-10-28:** `voice.moonshine_vad_threshold: 0.01` (stable over 26 clips in one process; 0 is broken). Not yet soak-tested over a long `rover` session; worth an upstream report.
+18. **Spoken stop range is short.** On the B1 sets every model hears near takes, but Moonshine small returns empty transcripts beyond roughly the 9th of 20 stepped-back takes (quiet) / 5th (wheels running). Gemma manages 12 / 8. The operator was ~7 m away at the last take. Wheel noise at 0.30 is about as loud as speech at the mic. Never rely on voice alone to stop the robot: `/stop` and the 0.5 s watchdog are the guarantee. Improving it needs a better mic or mic placement (gain is not the limit, §Phase 4 voice v4). Re-check with the wheels on the floor.
