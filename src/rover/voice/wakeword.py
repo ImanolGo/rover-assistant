@@ -51,7 +51,7 @@ class OpenWakeWord(WakeWord):
         model_path: str,
         threshold: float = 0.5,
         cooldown_s: float = 2.0,
-        speex_noise_suppression: bool = True,
+        speex_noise_suppression: bool = False,
         vad_threshold: float = 0.5,
     ):
         super().__init__(threshold, cooldown_s)
@@ -104,7 +104,7 @@ def make_wakeword(
     model_path: str,
     threshold: float = 0.5,
     cooldown_s: float = 2.0,
-    speex_noise_suppression: bool = True,
+    speex_noise_suppression: bool = False,
     vad_threshold: float = 0.5,
 ) -> WakeWord:
     """Build the real openWakeWord detector (tests inject :class:`FakeWakeWord`)."""

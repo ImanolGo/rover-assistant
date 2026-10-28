@@ -65,7 +65,7 @@ class VoiceConfig:
     wakeword_model: str = "models/wake_word/hey_roe_ver.onnx"
     wakeword_threshold: float = 0.5
     wakeword_vad_threshold: float = 0.5
-    speex_noise_suppression: bool = True
+    speex_noise_suppression: bool = False
     vad_threshold: float = 0.5
     end_silence_ms: int = 800
     no_speech_timeout_s: float = 3.5
@@ -226,7 +226,7 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> RobotConfig:
         wakeword_model=voice_raw.get("wakeword_model", VoiceConfig.wakeword_model),
         wakeword_threshold=float(voice_raw.get("wakeword_threshold", 0.5)),
         wakeword_vad_threshold=float(voice_raw.get("wakeword_vad_threshold", 0.5)),
-        speex_noise_suppression=bool(voice_raw.get("speex_noise_suppression", True)),
+        speex_noise_suppression=bool(voice_raw.get("speex_noise_suppression", False)),
         vad_threshold=float(voice_raw.get("vad_threshold", 0.5)),
         end_silence_ms=int(voice_raw.get("end_silence_ms", 800)),
         no_speech_timeout_s=float(voice_raw.get("no_speech_timeout_s", 3.5)),

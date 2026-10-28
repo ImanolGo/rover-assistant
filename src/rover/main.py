@@ -209,7 +209,7 @@ class App:
             stt.close()
         except Exception as exc:  # noqa: BLE001 - voice must never kill the brain
             self.voice_error = f"{type(exc).__name__}: {exc}"
-            print(f"voice disabled: {self.voice_error}")
+            print(f"voice disabled: {self.voice_error}", flush=True)
 
     def _on_transcript(self, text: str) -> None:
         self.last_transcript = text

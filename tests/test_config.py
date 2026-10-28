@@ -29,7 +29,7 @@ def test_load_real_config_maps_every_section():
     assert config.voice.enabled is True
     assert config.voice.no_speech_timeout_s == pytest.approx(3.5)
     assert config.voice.wakeword_vad_threshold == pytest.approx(0.5)
-    assert config.voice.speex_noise_suppression is True
+    assert config.voice.speex_noise_suppression is False
     assert config.voice.stt_backend == "moonshine"
     assert config.voice.moonshine_model == "small"
     assert config.voice.moonshine_vad_threshold == 0.01
