@@ -193,8 +193,25 @@ def main() -> int:
         # waiting and start the take at once. Speaker delay + chime is ~0.6 s and a
         # quick answer starts right after the beep, so waiting for it clipped the
         # first word; the take keeps the chime (as runtime turns do).
-        tts.say(spoken)
-        time.sleep(PROMPT_GAP_S)
+        # Keep reading the mic while the robot talks: an unread arecord pipe fills
+        # (~2 s) and arecord then backs up its own buffer, which flush() cannot
+        # reach, so a long prompt's tail leaked into the take ("...further away").
+        # The runtime's CapturePump always reads, so it never had this backlog.
+        talking = threading.Event()
+        talking.set()
+
+        def discard() -> None:
+            while talking.is_set():
+                capture.read_frame()
+
+        reader = threading.Thread(target=discard, daemon=True)
+        reader.start()
+        try:
+            tts.say(spoken)
+            time.sleep(PROMPT_GAP_S)
+        finally:
+            talking.clear()
+            reader.join(timeout=1.0)
         capture.flush()
         play_wav(tts.speaker, config.voice.wake_sound, wait=False)
         print(shown, flush=True)
