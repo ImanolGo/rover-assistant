@@ -110,6 +110,7 @@ class _MoonshineStream:
 
     def __init__(self, stream: object):
         self._stream = stream
+        self._closed = False
         self._partials: list[str] = []
         self._finals: list[str] = []
 
@@ -132,13 +133,18 @@ class _MoonshineStream:
         return self._partials[-1].strip() if self._partials else ""
 
     def final(self) -> str:
-        self._stream.stop()
-        close = getattr(self._stream, "close", None)
-        if close is not None:
-            close()
+        self._close()
         return " ".join(self._finals).strip() or self.partial()
 
     def cancel(self) -> None:
+        self._close()
+
+    def _close(self) -> None:
+        # Once only: libmoonshine raises (ctypes ArgumentError, None handle) on a stop()
+        # after close(), and barge-in calls final() then cancel() on a non-stop segment.
+        if self._closed:
+            return
+        self._closed = True
         stop = getattr(self._stream, "stop", None)
         if stop is not None:
             stop()

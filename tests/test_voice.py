@@ -141,9 +141,12 @@ class _FakeMoonshineStream:
 
     def add_audio(self, data, sample_rate=16000): ...
 
-    def stop(self): ...
+    def stop(self):
+        if getattr(self, "closed", False):  # libmoonshine: None handle -> ArgumentError
+            raise RuntimeError("stop() after close()")
 
-    def close(self): ...
+    def close(self):
+        self.closed = True
 
 
 class _FakeTranscriber:
@@ -188,6 +191,14 @@ def test_make_stt_passes_moonshine_vad_threshold(monkeypatch):
     )
     assert isinstance(make_stt(config, "http://test"), MoonshineStt)
     assert captured == {"arch": "small-arch", "options": {"vad_threshold": "0.02"}}
+
+
+def test_moonshine_stream_final_then_cancel_closes_once():
+    # Barge-in on a non-stop segment calls final() then cancel() (2026-10-28 crash).
+    stream = MoonshineStt("unused", transcriber=_FakeTranscriber()).new_stream()
+    assert stream.final() == "hello world"
+    stream.cancel()
+    stream.cancel()
 
 
 def test_moonshine_arch_mapping():
