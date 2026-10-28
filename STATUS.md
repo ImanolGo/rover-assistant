@@ -1,7 +1,7 @@
 # STATUS.md
 
-**Current phase:** 5 — Brain: planner, skills, state machine (Phases 3–4 recorded)
-**Last updated:** 2026-10-01 (Phase 4: voice front end verified live on hardware; HEAD 82235d3)
+**Current phase:** pre-5 fix pass (audit 2026-10-28) → then 5 — Brain: planner, skills, state machine
+**Last updated:** 2026-10-28 (audit fixes: voice wiring, monotonic watchdog, stop ordering, CI deps; base 0b666f9)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
 ## Progress
@@ -9,10 +9,10 @@
 | Phase | State | Exit criteria met | Notes |
 |---|---|---|---|
 | 0 Bootstrap | ✅ | ☑ skeleton ☑ assets ☑ env ☑ llama.cpp ☑ models ☑ tooling | `uv sync` needs `tool.uv.sources` pinning torch to jetson-cu126 (PyPI aarch64 torch = cu130, too new for JP6 driver). First CUDA load needs `drop_caches` (do **not** raise `min_free_kbytes` — see G1). Image assets (robot photo, test frames) in assets/. |
-| 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = **Gemma audio**; whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
-| 2 HAL | ✅ | ☑ camera ☑ geometry ☑ rover ☑ audio ☑ hw: camera / audio (3/3) / rover | 45 laptop tests green; all three `hardware_tests/` ran on the robot (2026-10-01). Camera 30.0 fps, audio through the UACDemo sink, rover wheels-up motions + watchdog pass, gyro bias calibrated per boot. See §Phase 2 HAL. |
+| 1 Measure | ✅ | ☑ legacy profile ☑ benches 1.1–1.9 ☑ G1 (clean re-run: perf ✅, memory deviation accepted) ☑ Laya ☑ STT decision ☐ 1.10 mic recordings | STT = Gemma audio at the time (**superseded 2026-10-02: Moonshine tiny streaming is the default**, see §Phase 4 voice v2); whisper.cpp built (CUDA) but dropped from the runtime. 1.10 recordings still need the mic on the robot (non-blocking). See GATE G1. |
+| 2 HAL | ✅ | ☑ camera ☑ geometry ☑ rover ☑ audio ☑ hw: camera / audio (3/3) / rover | ⚠ "cap 0.15" motions actually ran at **0.30** (deadband raises every nonzero command; Known issue 13). 45 laptop tests green; all three `hardware_tests/` ran on the robot (2026-10-01). Camera 30.0 fps, audio through the UACDemo sink, rover wheels-up motions + watchdog pass, gyro bias calibrated per boot. See §Phase 2 HAL. |
 | 3 Perception | 🔄 | ☑ tracker ☑ bearing sign ☑ API/video ☑ §10 camera/perception/brain-CPU · ☐ detector→motor p90 (Phase 5) | YOLO11n TRT + ByteTrack stable ids, correct bearing sign, 27–34 fps in-process; FastAPI + dashboard; `ROVER_SIM=1` synthetic sim; 78 laptop tests. See §Phase 3 Perception. |
-| 4 Voice | ✅ | ☑ wake ☑ VAD ☑ STT ☑ TTS ☑ intents ≥90% | Live on hardware: "Hey Rover …" → transcript → intent (`go_to`/`describe`). 20-command bench **18/20 = 90%** intents, p50 0.56 s end-of-speech → intent (Piper-synthesized audio; 1.10 mic recordings pending). Wired into `rover.main`. See §Phase 4 Voice. |
+| 4 Voice | 🔄 | ☑ wake ☑ VAD ☑ STT ☑ TTS ☑ intents ≥90% (synthesized) · ☐ bench the B1 real-mic recordings · ☐ re-verify through `rover` | **2026-10-28:** voice never started inside `rover` from 7e3e8d9 to the audit fix (Known issue 14), so the default path (Moonshine + threaded worker + barge-in) has not yet run on hardware. Exit criterion was met on Piper-synthesized audio only (deviation logged); the B1 real-mic takes were recorded on the robot 2026-10-02 but not yet run through the bench. Earlier: live on hardware via `hardware_tests/test_voice.py` (inline path, Gemma STT): "Hey Rover …" → transcript → intent (`go_to`/`describe`). 20-command bench **18/20 = 90%** intents, p50 0.56 s end-of-speech → intent (Piper-synthesized audio; 1.10 mic recordings pending). Wired into `rover.main`. See §Phase 4 Voice. |
 | 5 Brain | ⏳ | ☐ planner ☐ skills ☐ selector ☐ verify ☐ sim ☐ robot | |
 | 6 Field | ⏳ | ☐ go_to ≥70% ☐ follow ≥4/5 ☐ describe ≥15/20 ☐ soak | |
 | 7 Deploy | ⏳ | ☐ systemd ☐ doctor ☐ cold boot | |
@@ -178,13 +178,14 @@ flag checked between blocks; no subprocess, no idle-timeout dead air).
 openWakeWord's `Model(...)`; the turn audio is flushed after the notify chime so
 it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
 
-**Measurements still owed — blocked (Known issue 12):**
-- Moonshine tiny full-stack `MemAvailable` delta on a healthy run: **not
-  obtained.** Two attempts had llama-server's mmproj path fail (`vision_ok 0 /
-  vision_fail 1193`, `cudaMalloc failed: out of memory` + NvMap error 12) and the
-  camera/YOLO fail to start; `drop_caches` did not recover it. The contention
-  latency table in §Phase 4 voice v2 is from **run 1** (the run whose Gemma
-  baseline returned responses), not the 863-error run.
+**Measurements — status after the CMA fix (Known issue 12):**
+- Moonshine tiny full-stack `MemAvailable` delta: **obtained** after stopping
+  ollama/jtop — 30-min soaks give 919.8 → 728.8 MB (−191 MB), 0 errors (see
+  §Phase 4 voice v2). The two earlier failed attempts (`vision_fail 1193` / 863,
+  NvMap error 12) are superseded. The contention latency table in §Phase 4
+  voice v2 is from the **healthy 11:15 re-run** (`p4b_stt_moonshine.json` +
+  `p4b_vision_load.json`, vision 132/0); the 1.34 s / 0.49 s figures in the
+  B3-DEFERRED decision row are from run 1.
 - Moonshine ORT threads (item 3): the C API exposes only a **single-thread toggle**
   (`MOONSHINE_ORT_SINGLE_THREAD`), no numeric count, so no 2/4 sweep. A/B with
   Moonshine-tiny transcribing while YOLO runs (2026-10-02 12:34, llama down, so
@@ -194,7 +195,8 @@ it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
   CPU for equal/better p90; set in `rover/__init__.py`.
 - `Transcriber.set_keyterms([...])` (vocabulary biasing) is the intended lever for
   the real-mic command set; apply it when B1 recordings exist.
-- 30-min soak (criterion b) and real-mic recordings (B1): pending.
+- 30-min soak (criterion b): **done** (`p6_soak_tiny.json`). Real-mic recordings (B1): **recorded 2026-10-02 on the robot** (48 labelled takes in `bench/data/commands/`, Jetson only — WAVs are gitignored), **not yet benchmarked**; they decide tiny vs small.
+- On the 6-command contention set, **"stop" was transcribed as "Top" by both Gemma and Moonshine tiny** (`p4b_stt_moonshine.json`). Stop recall is the safety-critical number; B1 must report it separately, and `set_keyterms` should be tried on it.
 - `bench_wake.py` motor-noise before/after: pending motor-noise audio.
 
 ### Components in isolation
@@ -204,7 +206,6 @@ it is not captured (**closes known issue 10**). C2/C7 landed earlier. 145 tests.
 | Undistort (remap) | 820×616 | 2.1 ms | — | 471 fps equiv. | — | full-res 1640×1232: 13.5 ms — done once per Gemma query only |
 | YOLO11n TRT FP16 | 640, e2e + ByteTrack | 27.7 ms | — | **36.2 fps** | 1110 MB | model-only: 37.3 fps / 26.8 ms. Engine exported on-device (`scripts/export_yolo.sh`) |
 | whisper.cpp base.en | CUDA | 0.92 s | 0.93 s | — | 708 MB | 2.2 s on CPU (`--no-gpu`) → GPU wins. All 3 test clips transcribe correctly. whisper.cpp @ master, CUDA sm_87 |
-| Undistort (remap) | 820×616 | 2.1 ms | — | 471 fps equiv. | — | full-res 1640×1232: 13.5 ms/frame — legacy did this every frame |
 | Piper lessac-medium | piper CLI, cold load | — | 2.2 s | RTF 1.16 | 147 MB | cold-load included; a persistent process amortizes load (see bench_tts.py) |
 | openWakeWord hey_roe_ver | onnx, CPU | — | — | — | — | HeyRover.wav hit 0.915 (5 frames > 0.5); HeyJarvis.wav 0.001 (no false fire); idle-listening **17% of one core** |
 | Gemma E2B text | Q4_K_M, c=2048, thinking off | TTFT **0.09 s** | — | — | 4.7 GB (incl. 1.8 GB file-mapped) | prompt 63 tok/s, gen 27 tok/s; planner answer 1.1 s wall |
@@ -323,12 +324,15 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-01 | Perception processes only **new** frames (capture-timestamp guard) | the loop re-ran the detector on the same frame at ~1 kHz, which would peg the GPU | sim smoke: 997k frames in seconds → camera-rate |
 | 2026-10-01 | STT confirmed live: **Gemma audio** via llama-server | 20 synthesized commands → 18/20 intents, p50 0.56 s; live "go to the blue bottle" / "what do you see" correct | `bench/bench_voice.py`, `hardware_tests/test_voice.py` |
 | 2026-10-02 | **Change the B3 gate criterion**: replace "MemAvailable ≥ G1 floor (574 MB)" with "≥ 350 MB **and** a 30-min soak with zero new NvMap/vision errors" | the old floor is failed by any addition, so it cannot discriminate; 350 MB + a soak keeps the real risk (NvMap exhaustion / instability) while allowing a small STT | rationale only; both unmeasured |
-| 2026-10-02 | B3 STT gate **DEFERRED — blocked on memory, pending measurement** → keep Gemma; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB vs Gemma 0.90/0.44 s. Healthy contention (run 1): Gemma p90 **1.34 s** vs tiny **0.49 s**, small 0.88 s. Tiny's full-stack MemAvailable delta and the 30-min soak are unmeasured; real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
+| 2026-10-02 | *(superseded by the B3 PASSES row below; numbers here are from contention run 1)* B3 STT gate **DEFERRED — blocked on memory, pending measurement** → keep Gemma; Moonshine tiny is the candidate | synthesized idle: tiny 0.90 acc/0.18 s p90/154 MB, small 0.95/0.33 s/373 MB vs Gemma 0.90/0.44 s. Healthy contention (run 1): Gemma p90 **1.34 s** vs tiny **0.49 s**, small 0.88 s. Tiny's full-stack MemAvailable delta and the 30-min soak are unmeasured; real-mic set pending | `bench_stt_moonshine.py`, `bench/contention_load.py`, `p4b_stt_*` |
 | 2026-10-02 | **The clean memory floor is ~920 MB, not ~574 MB.** Baseline 30-min soak: MemAvailable min 919.8 (p5 921.7), 0 errors | the old 574 MB figure came from a boot where **ollama + jtop pinned `CmaFree` at 1.8 MB**, which is what actually caused the NvMap/cudaMalloc failures — not the stack. Stopping them (`llama_up.sh` now does) restores ~220 MB CMA and llama loads first try | `p6_soak_baseline.json`, `p6_soak_tiny.json` |
 | 2026-10-02 | **Moonshine streaming is the default STT** (`voice.stt_backend: moonshine`); Gemma selectable; **tiny** provisional (real-mic decides tiny vs small); vocabulary biasing via `set_keyterms`; C3 barge-in stop enabled for streaming backends | human decision; tiny passed B3 on the synthesized set (acc 0.90, idle p90 0.18 s, contention 0.28 s, soak floor 728.8 MB, 0 errors) | `robot.yaml`, `voice/stt.py`, `bench/results/p4b_stt_moonshine.json` |
 | 2026-10-02 | **B3 gate PASSES for Moonshine tiny** (synthesized set); integration deferred to C6 (held) | tiny: acc 0.90 = Gemma, idle p90 0.18 s, healthy contention p90 0.28 s, +191 MB (soak floor 728.8 ≥ 350), 30-min soak vision 120/0 and 0 new NvMap errors; no GPU. Real-mic set is the deciding confirmation; revert to Gemma if it regresses | `p4b_vision_load.json`, `p6_soak_tiny.json`, `p4b_stt_moonshine.json` |
 | 2026-10-02 | Deletion pass: drop `voice.whisper_model` (dead) and the unused `sounddevice` dependency | whisper was dropped from the runtime in Phase 1; nothing imports sounddevice (audio uses arecord/aplay) | grep over src/tests; 146 tests pass |
-| 2026-10-02 | **src/ budget revised `< 3,000` → `< 3,500` lines** for v1 | the voice v2/v3 work (threaded capture/listener/worker, in-process Piper, continuation, intents) is required functionality and the original target predates it; current count **3,274**. The `< 3,000` target still describes the original design scope; a deletion pass runs each phase, and `docs/torch_removal.md` will change the count (+~350–450 when scoped) | `find src -name '*.py' | xargs cat | wc -l` |
+| 2026-10-02 | **src/ budget revised `< 3,000` → `< 3,500` lines** for v1 | the voice v2/v3 work (threaded capture/listener/worker, in-process Piper, continuation, intents) is required functionality and the original target predates it; count at the time **3,274** (2026-10-28: **3,570**, with `brain/` still stubs — over budget; the inline `VoiceLoop` turn path duplicating the worker path is the first deletion candidate). The `< 3,000` target still describes the original design scope; a deletion pass runs each phase, and `docs/torch_removal.md` will change the count (+~350–450 when scoped) | `find src -name '*.py' | xargs cat | wc -l` |
+| 2026-10-28 | **Audit fix pass before Phase 5** | (1) `App._voice_loop = None` shadowed the method → voice thread ran `target=None` (silent no-op) since 7e3e8d9; renamed to `_run_voice` + regression test. (2) Watchdog and frame timestamps moved `time.time()` → `time.monotonic()` (an NTP step back would keep a stale command "fresh" / stall perception). (3) Spoken stop reaches `on_intent` before "Stopping." is spoken; `App.stop()` cancels TTS. (4) CI red since Phase 3 (missing `psutil`, `soundfile`): CI and laptop now install `requirements-test.txt`; `tests/` linted too | `tests/test_main.py`, `tests/test_pipeline.py` (3 new tests fail on 0b666f9, pass after); 158 pass |
+| 2026-10-28 | **Phase 4 exit accepted on synthesized audio** (deviation) | PLAN requires 20 *recorded* commands; only Piper-synthesized sets were benchmarked. The B1 takes exist on the Jetson (48, 2026-10-02); running `bench_stt_moonshine.py` on them is owed and can revert the tiny/small/Gemma choice | §Phase 4 Voice |
+| 2026-10-28 | `planner.mode` default → `completion_fewshot` | matches the bench 1.9 decision (90% vs 83%); the config still said `jinja_tools` | bench 1.9 row above |
 
 ## Known issues
 1. CUDA/NvMap allocation failures — mmproj load (`NvMapMemAllocInternalTagged error 12`) and the camera (`Failed to create CaptureSession` / `(Argus) InsufficientMemory`) — after any heavy NvMap use. Fix (needs sudo): `sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory`, then retry. Do **not** raise `vm.min_free_kbytes` (it deflates MemAvailable ~2 GB and forces swap — see G1). llama-server sometimes needs 2–4 retries; must go into `scripts/doctor.sh` (Phase 7).
@@ -339,7 +343,9 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 6. G1 clean re-run (2026-09-29): performance/functional criteria pass, swap stable, no OOM; `MemAvailable` ~574 MB is below the 800 MB bar and is an accepted deviation (Q4_K_M cannot leave >800 MB on 8 GB; Q3_K_M would but degrades vision). The 60-min soak (Phase 6) re-tests this under MemProbe.
 7. Desktop pipewire/pulseaudio owns the USB audio devices on this image: PortAudio cannot open `hw:0,0` ("Device unavailable") and direct `plughw` is intermittently busy. The audio HAL selects the PulseAudio sink/source by name and plays/captures through `-D pulse` (`PULSE_SINK`/`PULSE_SOURCE`), falling back to `plughw` when no sound server runs. Verified: UACDemoV1.0 sink RUNNING during playback; USB mic source. Headless production must either keep a sound server or rely on the fallback._
 8. `bench/results/*.json` are **tracked**, so running any bench on the Jetson dirties its working tree and blocks `scripts/dev_sync.sh` (`updateInstead` will not clobber it). Commit the new results, or discard them with `scripts/dev_sync.sh --discard-results` before pushing code.
-9. The laptop `.venv` runs `pytest`/`ruff` directly, but `uv run`/`uv sync` on x86_64 fail: `tool.uv.sources` pins `torch` to the Jetson cu126 index (aarch64/cp310 wheels only). **Do not** relax that pin — PyPI now ships aarch64 torch wheels (cu130) that the JP6 driver rejects (Known issue 3). The source-marker fallback was tried and collapses to PyPI on this uv version, so the pin stays. Use `.venv/bin/pytest` locally; keep `uv run` for the Jetson. (Laptop sim in Phase 3 must therefore use `.venv/bin/rover`, not `uv run rover`.)
+9. The laptop `.venv` runs `pytest`/`ruff` directly, but `uv run`/`uv sync` on x86_64 fail: `tool.uv.sources` pins `torch` to the Jetson cu126 index (aarch64/cp310 wheels only). **Do not** relax that pin — PyPI now ships aarch64 torch wheels (cu130) that the JP6 driver rejects (Known issue 3). The source-marker fallback was tried and collapses to PyPI on this uv version, so the pin stays. Use `.venv/bin/pytest` locally (create it with `uv venv -p 3.10 && uv pip install -r requirements-test.txt && uv pip install -e . --no-deps`, the same set CI installs); keep `uv run` for the Jetson. (Laptop sim in Phase 3 must therefore use `.venv/bin/rover`, not `uv run rover`.)
 10. Voice turns start capturing at wake detection, so saying "Hey Rover" and then pausing yields an extra `unknown` turn (the wake word itself). Harmless — no action is taken — but a pre-roll trim is a later refinement.
 11. Tiny one-word utterances ("halt", "go home") are occasionally mis-transcribed by Gemma audio ("Holt", "Gohon") and fall through to `unknown`; the regex table itself matches them. Longer phrasing is robust (90% on the 20-command bench).
 12. llama-server's mmproj/NvMap load fails (`cudaMalloc failed: out of memory`, NvMap error 12, `GGML_ASSERT(buffer)`) when **CMA is exhausted**. The cause on this image is **ollama + jtop pinning `CmaFree` at ~1.8 MB**; stopping them frees ~220 MB CMA and llama loads first try. `scripts/llama_up.sh` now stops ollama/jtop and retries; a reboot alone did **not** fix it (the holders autostart). Fold the ollama/jtop stop into `doctor.sh` (Phase 7).
+13. **Speed cap vs deadband conflict (open — operator decision).** `speed_cap` 0.15 clamps first, then `min_wheel_pwm` 0.30 raises every nonzero command to ±0.30, so the effective speed is always 0.30 (bang-bang) and the cap never binds. AGENTS.md states both rules. Must be resolved before the Phase 5 APPROACH/FOLLOW controllers.
+14. Voice did not start inside `rover` from 7e3e8d9 until the 2026-10-28 fix (attribute shadowed the thread target; no error, no log). Everything voice-related after that commit was verified via benches / `hardware_tests/test_voice.py` (inline path, Gemma STT) only — re-verify through `rover` on hardware.

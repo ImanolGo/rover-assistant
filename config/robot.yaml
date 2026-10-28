@@ -86,7 +86,7 @@ voice:
 planner:
   url: http://127.0.0.1:8080        # llama-server
   fallback_url: null                # optional LAN GPU server
-  mode: jinja_tools                 # jinja_tools | completion_fewshot  (decided by bench 1.9)
+  mode: completion_fewshot          # completion_fewshot | jinja_tools  (bench 1.9: 90% vs 83%)
   max_tokens: 96
   temperature: 0.2
   image_max_tokens: 70

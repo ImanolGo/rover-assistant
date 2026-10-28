@@ -35,8 +35,8 @@ The robot runs two cooperating loops:
   network stands between "I see the cup" and "turn left" — this loop is
   deterministic and safe.
 - **The slow loop (voice + reasoning, on demand).** The wake word
-  (openWakeWord) opens a turn; Silero VAD and whisper.cpp turn your voice
-  into text; simple commands ("stop", "turn left") are matched by regex and
+  (openWakeWord) opens a turn; Silero VAD and Moonshine (streaming, on the
+  CPU) turn your voice into text; simple commands ("stop", "turn left") are matched by regex and
   skip the model entirely. Everything else goes to **Gemma 4 E2B** — a small
   multimodal model served by llama-server — which answers questions about the
   camera view, plans missions as tool calls (`go_to`, `follow`, `describe`),
@@ -47,7 +47,7 @@ The robot runs two cooperating loops:
 
 ```
  you speak ──▶ wake word ──▶ VAD ──▶ STT ──▶ intents/planner ──▶ skills ──▶ wheels
-                (openWakeWord) (Silero) (whisper.cpp)  (Gemma 4 E2B)   (deterministic)
+                (openWakeWord) (Silero) (Moonshine)    (Gemma 4 E2B)   (deterministic)
                      ▲                                                       │
                      └──────────── "stop" regex bypasses everything ◀────────┘
 ```
@@ -98,7 +98,7 @@ dozen nodes), **no depth model** (distance from object height in frame), and
 | USB speaker (48 kHz stereo) | Voice output |
 
 Models shipped on-device (~6 GB total): Gemma 4 E2B Q4_K_M + mmproj,
-whisper.cpp base.en, Piper lessac-medium, YOLO11n TensorRT FP16, and a custom
+Moonshine tiny streaming (STT), Piper lessac-medium, YOLO11n TensorRT FP16, and a custom
 "Hey Rover" openWakeWord model. Exact filenames and SHA256s live in
 [models/MODELS.md](models/MODELS.md).
 
@@ -112,7 +112,7 @@ rover-assistant/
 ├── hardware_tests/   tests that need the real robot, run manually, wheels up
 ├── tests/            laptop-only pytest — must pass at every commit
 ├── scripts/          model downloads, llama.cpp build, YOLO export
-├── deploy/           systemd units + install script
+├── deploy/           systemd units + install script (Phase 7, not yet written)
 └── assets/           wake-word clips, UI sounds, test images
 ```
 
@@ -123,14 +123,19 @@ git clone https://github.com/ImanolGo/rover-assistant && cd rover-assistant
 bash scripts/setup_pytorch_jetson.sh   # CUDA torch/tensorrt wheels
 uv venv --system-site-packages && uv sync
 bash scripts/build_llamacpp.sh         # builds llama-server (pinned commit)
-bash scripts/download_models.sh        # Gemma, whisper, piper, YOLO — ~6 GB
+bash scripts/download_models.sh        # Gemma, Moonshine, Piper, YOLO — ~6 GB
 bash scripts/export_yolo.sh            # TensorRT engine, built on-device
 uv run rover                           # wheels up first!
 ```
 
 A laptop works too: `ROVER_SIM=1 .venv/bin/rover` substitutes the camera, mic
 and motors with fakes. (`uv run` is reserved for the Jetson — see STATUS.md
-Known issue 9.)
+Known issue 9.) Laptop test env, same as CI:
+
+```bash
+uv venv -p 3.10 && uv pip install -r requirements-test.txt && uv pip install -e . --no-deps
+.venv/bin/pytest -q
+```
 
 ### Two-machine workflow (edit on the laptop, test on the Jetson)
 
@@ -162,8 +167,8 @@ jetson:repos/rover-assistant`. Pushing is refused if the Jetson tree is dirty
 ## Status
 
 Under active development — see [STATUS.md](STATUS.md) for the honest, current
-state. The environment, models and measurement tooling are in place; component
-benchmarks are being recorded now.
+state. Measurement (Phase 1), the hardware layer, perception and the voice front
+end are done; the brain (planner, skills, mission loop — Phase 5) is next.
 
 ## License
 
