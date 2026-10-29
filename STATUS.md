@@ -311,7 +311,7 @@ boot-to-boot variance and shows the floor is not a single number.
 
 **IMU on the floor** (`hardware_tests/test_imu.py`, 2026-10-29, robot still, 60 s, 743
 samples): roll −0.46° / pitch −0.11° (level), accelerometer z 975 mg (|a| ≈ 1 g), **yaw
-drift +0.02° / 60 s** (sd 0.48°; magnetometer-fused in firmware), gyro bias < 0.2 °/s.
+drift +0.02° / 60 s** (sd 0.48°; **but see below: the firmware yaw does not track rotation**), gyro bias < 0.2 °/s.
 Raw gz has ±16 °/s single-sample spikes (64/743, mean ≈ 0), so skills should turn on the
 firmware yaw, not on integrated raw gyro. The 2026-10-28 on-box reading (roll −133°, pitch
 35°) came with |a| ≈ 23 mg, i.e. a bad IMU state, not a mounting tilt; the test now fails on
@@ -325,8 +325,21 @@ stop: 0.30 ≈ 0°, 0.35 ≈ −1°, 0.40 ≈ −10°, 0.45 ≈ −19°, against
 scrub torque, not power. **Yaw under motor current:** while the motors were commanded (even
 stalled) the yaw read 2–3° off and recovered within ~1 s of stopping. At 0.45 the yaw
 during the spin under-read the post-stop value by ~11°, so a turn loop that stops on
-live yaw will under-turn; settle before trusting it. Turning strategy is a Phase 5
-input (see the decision log once chosen).
+live yaw will under-turn; settle before trusting it.
+
+**Correction, same session: the firmware yaw does not follow rotation at all.** Method
+comparison (operator watching): spin 0.5 / pivot (one side 0.45) / arc (0.30 / 0.45)
+all turned well, and kick (0.5 for 0.3 s, then 0.35) barely moved; yet the firmware yaw
+reported 13° / 3° / 3°. A 2 s spin at 0.5 that the operator saw as nearly a full circle
+read **+5° firmware yaw vs +314° integrated gyro z** (bias-corrected). The firmware yaw
+is magnetometer-anchored, and the strongest field it sees is the robot's own
+(motors/battery), which turns with it. The "+0.02°/60 s drift" above therefore means
+"stuck", not "stable", and the 0.30–0.45 numbers above are unreliable (the operator saw
+only ticks/jerks there, which still holds). **Heading must come from the integrated gyro
+z.** Closed loop on the gyro (`hardware_tests/test_yaw_turn.py`, 0.5, stop 10° early):
+left +95.1°, right −98.1° against ±90° (stopped at +82.8 / −88.2, coast ~10–12°). The
+operator saw two quarter turns ending at the start heading. Turn rate at 0.5 ≈ 150°/s.
+In-place turns need ~0.5, above the 0.35 cap (decision pending).
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
