@@ -11,8 +11,7 @@ was written — the ``speaking`` flag and the post-chime flush depend on that.
 
 The playback stream is opened at the *voice's* sample rate (mono), so no numpy
 resampling is needed on the audio path — PulseAudio/aplay handles the device
-rate. This replaces the old ``piper --output-raw`` subprocess whose 0.6 s idle
-read added 0.6 s of dead air per sentence and could truncate under load.
+rate (the old ``piper --output-raw`` subprocess added 0.6 s of dead air per sentence).
 """
 
 from __future__ import annotations

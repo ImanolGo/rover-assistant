@@ -30,16 +30,34 @@ def _segmenter(end_after: int = 3) -> SpeechSegmenter:
     return SpeechSegmenter(FakeVad(start_after=0, end_after=end_after), max_utterance_s=10.0)
 
 
+class _SyncWorker(ThreadedWorker):
+    """The real turn handling, run synchronously inside ``submit`` (no thread)."""
+
+    def __init__(self, stt, **kwargs):
+        self.intents: list = []
+        super().__init__(stt, on_intent=self.intents.append, **kwargs)
+
+    def submit(self, audio, deadline=None) -> None:
+        self.handle(audio, deadline)
+
+
+def _loop(wake, segmenter, stt, **kwargs) -> tuple[VoiceLoop, _SyncWorker]:
+    worker = _SyncWorker(stt, **{k: kwargs.pop(k) for k in ("tts", "on_transcript") if k in kwargs})
+    loop = VoiceLoop(wake, segmenter, worker, **kwargs)
+    worker.on_empty = loop.arm_continuation
+    return loop, worker
+
+
 def _drive_to_intent(loop: VoiceLoop, frames: int = 8):
     for _ in range(frames):
-        intent = loop.process_frame(ONE)
-        if intent is not None:
-            return intent
+        loop.process_frame(ONE)
+        if loop.worker.intents:
+            return loop.worker.intents[-1]
     return None
 
 
 def test_turn_produces_go_to_intent_with_attributes():
-    loop = VoiceLoop(FakeWakeWord([0.0, 0.9]), _segmenter(), FakeStt("go to the red cup"))
+    loop, _ = _loop(FakeWakeWord([0.0, 0.9]), _segmenter(), FakeStt("go to the red cup"))
     assert loop.process_frame(ZERO) is None  # score 0 -> still listening
     assert loop.process_frame(ZERO) is None  # wake -> open the turn
     assert loop.state == RECORDING
@@ -62,7 +80,7 @@ def test_wake_plays_notify_sound_and_ack_is_spoken(tmp_path):
 
     speaker = NullSpeaker()
     tts = FakeTts()
-    loop = VoiceLoop(
+    loop, _ = _loop(
         FakeWakeWord([0.9]),
         _segmenter(),
         FakeStt("turn left"),
@@ -92,7 +110,7 @@ class SpyWake(FakeWakeWord):
 
 def test_wakeword_is_reset_when_a_turn_finishes():
     wake = SpyWake([0.9])
-    loop = VoiceLoop(wake, _segmenter(), FakeStt("turn left"))
+    loop, _ = _loop(wake, _segmenter(), FakeStt("turn left"))
     loop.process_frame(ZERO)  # wake -> open turn
     intent = _drive_to_intent(loop)
     assert intent is not None and intent.name == "turn_left"
@@ -100,7 +118,7 @@ def test_wakeword_is_reset_when_a_turn_finishes():
 
 
 def test_wake_can_fire_again_after_a_turn():
-    loop = VoiceLoop(FakeWakeWord([0.9], cooldown_s=0.0), _segmenter(), FakeStt("stop"))
+    loop, _ = _loop(FakeWakeWord([0.9], cooldown_s=0.0), _segmenter(), FakeStt("stop"))
     loop.process_frame(ZERO)
     _drive_to_intent(loop)
     assert loop.state == LISTENING
@@ -125,19 +143,19 @@ class ScriptedStt:
 
 def test_turn_continues_after_a_lone_wake_word():
     flushes: list[int] = []
-    loop = VoiceLoop(
+    loop, worker = _loop(
         FakeWakeWord([0.9]),
         SpeechSegmenter(FakeVad(start_after=0, end_after=2), max_utterance_s=10.0),
         ScriptedStt(["Hey Rover", "go to the red cup"]),
         flush=lambda: flushes.append(1),
         max_turn_s=10.0,
     )
-    assert loop.process_frame(ZERO) is None  # wake -> open turn
-    assert loop.process_frame(ZERO) is None  # "Hey Rover" only -> keep waiting
-    assert loop.state == RECORDING
+    loop.process_frame(ZERO)  # wake -> open turn
+    loop.process_frame(ZERO)  # "Hey Rover" only -> keep the turn open
+    assert worker.intents == []
     assert flushes  # the mic buffer was flushed between attempts
 
-    intent = loop.process_frame(ZERO)  # the command itself
+    intent = _drive_to_intent(loop)  # the command, without a new wake word
     assert intent is not None
     assert intent.name == "go_to"
     assert intent.target == "cup"
@@ -146,27 +164,27 @@ def test_turn_continues_after_a_lone_wake_word():
 
 def test_turn_abandoned_if_no_command_before_deadline():
     stt = ScriptedStt([""])
-    loop = VoiceLoop(
+    loop, _ = _loop(
         FakeWakeWord([0.9]),
         SpeechSegmenter(FakeVad(start_after=999), onset_timeout_s=0.0),
         stt,
         max_turn_s=0.0,
     )
-    assert loop.process_frame(ZERO) is None  # wake -> open turn (deadline already passed)
-    assert loop.process_frame(ZERO) is None
+    loop.process_frame(ZERO)  # wake -> open turn (deadline already passed)
+    loop.process_frame(ZERO)
     assert loop.state == LISTENING
     assert stt.calls == 0
     assert loop.false_wakes == 1
 
 
 def test_no_speech_after_wake_counts_a_false_wake():
-    loop = VoiceLoop(
+    loop, _ = _loop(
         FakeWakeWord([0.9]),
         SpeechSegmenter(FakeVad(start_after=999), onset_timeout_s=0.0),
         ScriptedStt([""]),
     )
-    assert loop.process_frame(ZERO) is None  # wake -> open turn
-    assert loop.process_frame(ZERO) is None  # no speech -> timeout
+    loop.process_frame(ZERO)  # wake -> open turn
+    loop.process_frame(ZERO)  # no speech -> timeout
     assert loop.state == LISTENING
     assert loop.false_wakes == 1
 
@@ -188,7 +206,7 @@ def test_wake_audio_is_flushed_before_the_chime_and_the_chime_does_not_block(tmp
         def drain(self, cancelled=None):
             events.append("drain")
 
-    loop = VoiceLoop(
+    loop, _ = _loop(
         FakeWakeWord([0.9]),
         _segmenter(),
         FakeStt("stop"),
@@ -249,7 +267,7 @@ def test_voice_loop_moving_dispatches_to_barge_in_not_wake():
 
         def reset(self) -> None: ...
 
-    loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), FakeStt("x"))
+    loop, _ = _loop(FakeWakeWord([0.9]), _segmenter(), FakeStt("x"))
     loop.barge = _SpyBarge()
     loop.set_moving(True)
     loop.process_frame(ONE)
@@ -262,7 +280,7 @@ def test_voice_loop_moving_dispatches_to_barge_in_not_wake():
 
 def test_transcript_callback_receives_text():
     seen: list[str] = []
-    loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), FakeStt("stop"), on_transcript=seen.append)
+    loop, _ = _loop(FakeWakeWord([0.9]), _segmenter(), FakeStt("stop"), on_transcript=seen.append)
     loop.process_frame(ZERO)
     intent = _drive_to_intent(loop)
     assert intent is not None and intent.name == "stop"
@@ -329,9 +347,10 @@ class _SpyWorker:
 
 def test_worker_path_hands_the_turn_off_and_resumes_listening():
     worker = _SpyWorker()
-    loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), FakeStt("x"), worker=worker)
+    loop = VoiceLoop(FakeWakeWord([0.9]), _segmenter(), worker)
     loop.process_frame(ZERO)  # wake -> open turn
-    assert _drive_to_intent(loop) is None  # the listener does not run STT
+    for _ in range(8):
+        loop.process_frame(ONE)  # the listener does not run STT itself
     assert len(worker.submitted) == 1
     assert loop.state == LISTENING
 
@@ -344,7 +363,7 @@ def test_threaded_path_continues_after_a_lone_wake_word():
         on_intent=intents.append,
     )
     segmenter = SpeechSegmenter(FakeVad(start_after=0, end_after=2), max_utterance_s=10.0)
-    loop = VoiceLoop(FakeWakeWord([0.9]), segmenter, worker.stt, worker=worker)
+    loop = VoiceLoop(FakeWakeWord([0.9]), segmenter, worker)
     worker.on_empty = loop.arm_continuation
     worker.start()
     try:

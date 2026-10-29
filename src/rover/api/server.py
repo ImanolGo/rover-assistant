@@ -116,6 +116,10 @@ def encode_jpeg(frame: np.ndarray, quality: int = _JPEG_QUALITY) -> bytes:
     return buffer.tobytes() if ok else b""
 
 
+def _text(canvas: np.ndarray, text: str, org: tuple[int, int], color, scale: float = 0.5) -> None:
+    cv2.putText(canvas, text, org, cv2.FONT_HERSHEY_SIMPLEX, scale, color, 1, cv2.LINE_AA)
+
+
 def _draw_bar(
     canvas: np.ndarray, y: int, label: str, value: float, color: tuple[int, int, int]
 ) -> None:
@@ -126,17 +130,8 @@ def _draw_bar(
     cv2.line(canvas, (mid, y), (mid, y), (255, 255, 255), 1)
     if span:
         cv2.rectangle(canvas, (mid, y - 6), (mid + span, y + 6), color, -1)
-    cv2.putText(canvas, label, (10, y + 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
-    cv2.putText(
-        canvas,
-        f"{value:+.2f}",
-        (width - 70, y + 5),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        color,
-        1,
-        cv2.LINE_AA,
-    )
+    _text(canvas, label, (10, y + 5), color)
+    _text(canvas, f"{value:+.2f}", (width - 70, y + 5), color)
 
 
 def annotate(snapshot: VideoSnapshot, size: tuple[int, int] = (820, 616)) -> np.ndarray:
@@ -152,27 +147,10 @@ def annotate(snapshot: VideoSnapshot, size: tuple[int, int] = (820, 616)) -> np.
         cv2.rectangle(canvas, (x1, y1), (x2, y2), (0, 255, 0), 2)
         track = "" if detection.track_id is None else f"#{detection.track_id} "
         label = f"{track}{detection.cls} {detection.conf:.2f} b{detection.bearing_deg:+.0f}"
-        cv2.putText(
-            canvas,
-            label,
-            (x1, max(12, y1 - 6)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 255, 0),
-            1,
-            cv2.LINE_AA,
-        )
+        _text(canvas, label, (x1, max(12, y1 - 6)), (0, 255, 0))
 
-    cv2.putText(
-        canvas,
-        f"{snapshot.state}  {snapshot.fps:4.1f} fps  {len(snapshot.detections)} obj",
-        (10, 22),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.6,
-        (255, 255, 255),
-        1,
-        cv2.LINE_AA,
-    )
+    summary = f"{snapshot.state}  {snapshot.fps:4.1f} fps  {len(snapshot.detections)} obj"
+    _text(canvas, summary, (10, 22), (255, 255, 255), scale=0.6)
     _draw_bar(canvas, height - 40, "L", snapshot.left, (0, 200, 255))
     _draw_bar(canvas, height - 16, "R", snapshot.right, (255, 120, 0))
     return canvas
@@ -245,10 +223,3 @@ def create_app(context: ApiContext) -> FastAPI:
         return {"ok": True}
 
     return app
-
-
-def run_server(context: ApiContext, host: str, port: int, **kwargs: Any) -> None:
-    """Blocking uvicorn entry point (used by ``rover.main`` in a thread/task)."""
-    import uvicorn
-
-    uvicorn.run(create_app(context), host=host, port=port, log_level="warning", **kwargs)

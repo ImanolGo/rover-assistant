@@ -15,6 +15,7 @@ import asyncio
 import signal
 import threading
 import time
+from dataclasses import replace
 from typing import Any
 
 from rover.api.server import VideoSnapshot, create_app
@@ -29,16 +30,7 @@ from rover.voice.intents import Intent, classify
 # word). describe / is_there / unknown / COMMAND do not move, so the wake word stays on.
 # Phase 5: follow actual wheel commands instead of the state name.
 MOTION_STATES = frozenset(
-    {
-        "FORWARD",
-        "BACKWARD",
-        "TURN_LEFT",
-        "TURN_RIGHT",
-        "TURN_AROUND",
-        "RETURN_HOME",
-        "GO_TO",
-        "FOLLOW",
-    }
+    "FORWARD BACKWARD TURN_LEFT TURN_RIGHT TURN_AROUND RETURN_HOME GO_TO FOLLOW".split()
 )
 
 
@@ -167,11 +159,15 @@ class App:
                 speex_noise_suppression=voice.speex_noise_suppression,
                 vad_threshold=voice.wakeword_vad_threshold,
             )
-            segmenter = SpeechSegmenter(
-                load_silero(end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold),
-                max_utterance_s=voice.max_utterance_s,
-                onset_timeout_s=voice.no_speech_timeout_s,
-            )
+
+            def new_segmenter() -> SpeechSegmenter:
+                return SpeechSegmenter(
+                    load_silero(end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold),
+                    max_utterance_s=voice.max_utterance_s,
+                    onset_timeout_s=voice.no_speech_timeout_s,
+                )
+
+            segmenter = new_segmenter()
             keyterms = vocabulary(self.config.perception.target_classes_h_stop.keys())
             stt = make_stt(voice, self.config.planner.url, keyterms=keyterms)
             tts = PiperTts(voice.tts_voice, self.config.audio)
@@ -182,26 +178,18 @@ class App:
             loop = VoiceLoop(
                 wakeword,
                 segmenter,
-                stt,
-                tts=tts,
+                worker,
                 speaker=speaker,
                 wake_sound=voice.wake_sound,
                 flush=lambda: (capture.flush(), frames.drain()),
                 max_turn_s=voice.max_turn_s,
                 on_false_wake=lambda: print("voice: false wake (no speech)"),
-                worker=worker,
             )
             worker.on_empty = loop.arm_continuation
             worker.on_speaking = loop.set_speaking
             if getattr(stt, "supports_streaming", False):
                 loop.barge = BargeInStop(
-                    SpeechSegmenter(
-                        load_silero(
-                            end_silence_ms=voice.end_silence_ms, threshold=voice.vad_threshold
-                        ),
-                        max_utterance_s=voice.max_utterance_s,
-                        onset_timeout_s=voice.no_speech_timeout_s,
-                    ),
+                    new_segmenter(),
                     stt.new_stream,
                     on_stop=self._on_barge_stop,
                     speaking=lambda: loop.speaking,
@@ -301,14 +289,7 @@ class App:
         self._set_state("STOPPED")
         self.left = self.right = 0.0
         with self._lock:
-            self._snapshot = VideoSnapshot(
-                frame=self._snapshot.frame,
-                detections=self._snapshot.detections,
-                state=self.state,
-                left=0.0,
-                right=0.0,
-                fps=self.fps,
-            )
+            self._snapshot = replace(self._snapshot, state=self.state, left=0.0, right=0.0)
 
     # --- lifecycle -----------------------------------------------------------
 

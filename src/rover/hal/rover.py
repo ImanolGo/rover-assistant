@@ -25,6 +25,7 @@ from typing import Any, Protocol
 DEFAULT_WHEELBASE_M = 0.16
 DEFAULT_MAX_LINEAR_VELOCITY = 0.3
 DEFAULT_MAX_SPEED = 0.5
+_GYRO = ("gx", "gy", "gz")
 
 
 @dataclass
@@ -195,7 +196,7 @@ class SerialRover:
         thread.start()
         self._threads.append(thread)
 
-    def _write(self, command: dict[str, Any]) -> bool:
+    def _send(self, command: dict[str, Any]) -> bool:
         try:
             with self._lock:
                 self._serial.write((json.dumps(command) + "\n").encode())
@@ -203,9 +204,6 @@ class SerialRover:
             return True
         except Exception:  # noqa: BLE001 - serial errors must never kill the writer
             return False
-
-    def _send(self, command: dict[str, Any]) -> bool:
-        return self._write(command)
 
     def drive(self, left: float, right: float) -> None:
         with self._lock:
@@ -240,12 +238,9 @@ class SerialRover:
         stores the mean as the bias, converted to rad/s. Returns the number of
         samples used; zero leaves the bias at zero (e.g. no IMU answering).
         """
-        samples: list[tuple[float, float, float]] = []
+        samples: list[tuple[float, ...]] = []
         previous_timeout = getattr(self._serial, "timeout", None)
-        try:
-            self._serial.timeout = 0.05  # type: ignore[attr-defined]
-        except Exception:  # noqa: BLE001 - best effort on exotic transports
-            previous_timeout = None
+        self._serial.timeout = 0.05  # short reads while polling
         try:
             deadline = time.monotonic() + duration_s
             while time.monotonic() < deadline:
@@ -256,26 +251,15 @@ class SerialRover:
                     if not line:
                         break
                     response = self.parse_feedback(line.decode("utf-8", errors="ignore"))
-                    if (
-                        response
-                        and response.get("T") == 1002
-                        and all(k in response for k in ("gx", "gy", "gz"))
-                    ):
-                        samples.append(tuple(float(response[k]) for k in ("gx", "gy", "gz")))
+                    if response and response.get("T") == 1002 and set(_GYRO) <= response.keys():
+                        samples.append(tuple(float(response[k]) for k in _GYRO))
                         self._update_attitude(response)
                         break
                 time.sleep(0.02)
         finally:
-            if previous_timeout is not None:
-                try:
-                    self._serial.timeout = previous_timeout  # type: ignore[attr-defined]
-                except Exception:  # noqa: BLE001
-                    pass
+            self._serial.timeout = previous_timeout
         if samples:
-            count = len(samples)
-            self._gyro_bias_rad_s = tuple(
-                math.radians(sum(sample[i] for sample in samples) / count) for i in range(3)
-            )
+            self._gyro_bias_rad_s = tuple(math.radians(sum(c) / len(c)) for c in zip(*samples))
         return len(samples)
 
     def _write_loop(self) -> None:
@@ -303,12 +287,9 @@ class SerialRover:
 
     def _update_attitude(self, response: dict[str, Any]) -> None:
         """Store roll/pitch/yaw (degrees) when present (T=1001 and T=1002)."""
-        if "r" in response:
-            self._roll_deg = float(response["r"])
-        if "p" in response:
-            self._pitch_deg = float(response["p"])
-        if "y" in response:
-            self._yaw_deg = float(response["y"])
+        for key, attr in (("r", "_roll_deg"), ("p", "_pitch_deg"), ("y", "_yaw_deg")):
+            if key in response:
+                setattr(self, attr, float(response[key]))
 
     def handle_feedback(self, response: dict[str, Any]) -> None:
         """Apply a T=1001/1002/130 feedback object (battery, attitude, gyro)."""
@@ -319,8 +300,8 @@ class SerialRover:
             self._update_attitude(response)
         elif kind == 1002:
             self._update_attitude(response)
-            if all(k in response for k in ("gx", "gy", "gz")):
-                self._gyro_dps = tuple(float(response[k]) for k in ("gx", "gy", "gz"))
+            if set(_GYRO) <= response.keys():
+                self._gyro_dps = tuple(float(response[k]) for k in _GYRO)
 
     def _read_loop(self) -> None:
         while not self._closing.is_set():

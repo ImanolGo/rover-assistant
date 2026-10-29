@@ -51,15 +51,9 @@ def parse_alsa_devices(text: str) -> list[dict[str, Any]]:
     for line in text.splitlines():
         match = _ALSA_LINE.search(line)
         if match:
-            card, _, device_name, device, _, device_sub = match.groups()
-            devices.append(
-                {
-                    "card": int(card),
-                    "device": int(device),
-                    "name": device_name.strip(),
-                    "subdevice": device_sub.strip(),
-                }
-            )
+            card, _, name, device, _, sub = match.groups()
+            record = {"card": int(card), "device": int(device)}
+            devices.append({**record, "name": name.strip(), "subdevice": sub.strip()})
     return devices
 
 
@@ -103,17 +97,19 @@ def _resample_mono(samples: np.ndarray, source_rate: int, target_rate: int) -> n
     return resampled.astype(np.float32)
 
 
-def _to_float32(samples: np.ndarray) -> np.ndarray:
-    if samples.dtype == np.int16:
-        return samples.astype(np.float32) / 32768.0
-    return samples.astype(np.float32)
+def to_float32(samples: np.ndarray) -> np.ndarray:
+    """int16 PCM -> float32 in [-1, 1]; float input passes through."""
+    data = np.asarray(samples)
+    if data.dtype == np.int16:
+        return data.astype(np.float32) / 32768.0
+    return data.astype(np.float32)
 
 
 def to_speaker_format(
     samples: np.ndarray, source_rate: int, config: AudioConfig, max_amplitude: float = 0.95
 ) -> np.ndarray:
     """Resample to the speaker rate, fan mono out to stereo, and peak-limit."""
-    data = _to_float32(samples)
+    data = to_float32(samples)
     if data.ndim == 1:
         data = _resample_mono(data, source_rate, config.speaker_rate)
         if config.speaker_channels >= 2:
@@ -223,21 +219,9 @@ class AlsaCapture:
         if self.source:
             target = "pulse"
             env = {**os.environ, "PULSE_SOURCE": self.source}
+        args = f"-r {config.mic_rate} -c 1 -f S16_LE -t raw --buffer-size=8192".split()
         self._proc = subprocess.Popen(
-            [
-                "arecord",
-                "-D",
-                target,
-                "-r",
-                str(config.mic_rate),
-                "-c",
-                "1",
-                "-f",
-                "S16_LE",
-                "-t",
-                "raw",
-                "--buffer-size=8192",
-            ],
+            ["arecord", "-D", target, *args],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             env=env,
@@ -311,16 +295,18 @@ def _pactl_names(kind: str) -> list[str]:
     return [entry["name"] for entry in parse_pulse_sinks(listing)]
 
 
-def find_pulse_sink(name: str) -> str | None:
-    """Return the PulseAudio/PipeWire sink matching ``name`` (normalised)."""
+def _find_pulse(kind: str, name: str) -> str | None:
+    """Return the PulseAudio/PipeWire sink/source matching ``name`` (normalised)."""
     needle = _normalise(name)
-    return next((n for n in _pactl_names("sinks") if needle in _normalise(n)), None)
+    return next((n for n in _pactl_names(kind) if needle in _normalise(n)), None)
+
+
+def find_pulse_sink(name: str) -> str | None:
+    return _find_pulse("sinks", name)
 
 
 def find_pulse_source(name: str) -> str | None:
-    """Return the PulseAudio/PipeWire source matching ``name`` (normalised)."""
-    needle = _normalise(name)
-    return next((n for n in _pactl_names("sources") if needle in _normalise(n)), None)
+    return _find_pulse("sources", name)
 
 
 STREAM_CHUNK_S = 0.02  # feeder write size
@@ -366,24 +352,10 @@ class AlsaSpeaker:
         if self.sink:
             target = "pulse"
             env = {**os.environ, "PULSE_SINK": self.sink}
+        rate, channels = self.config.speaker_rate, self.config.speaker_channels
+        args = f"-B {APLAY_BUFFER_US} -r {rate} -c {channels} -f S16_LE -t raw -".split()
         self._proc = subprocess.Popen(
-            [
-                "aplay",
-                "-q",
-                "-D",
-                target,
-                "-B",
-                str(APLAY_BUFFER_US),
-                "-r",
-                str(self.config.speaker_rate),
-                "-c",
-                str(self.config.speaker_channels),
-                "-f",
-                "S16_LE",
-                "-t",
-                "raw",
-                "-",
-            ],
+            ["aplay", "-q", "-D", target, *args],
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -467,11 +439,3 @@ class AlsaSpeaker:
             self._proc.wait(timeout=2.0)
         except subprocess.TimeoutExpired:
             self._proc.kill()
-
-
-def open_audio(config: AudioConfig | None = None, *, dry_run: bool = False):
-    """Build ``(capture, speaker)`` for the configured backend."""
-    config = config or AudioConfig()
-    if dry_run:
-        return None, NullSpeaker()
-    return AlsaCapture(config), AlsaSpeaker(config)

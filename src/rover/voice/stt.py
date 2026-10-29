@@ -22,6 +22,8 @@ from typing import Protocol
 import httpx
 import numpy as np
 
+from rover.hal.audio import to_float32
+
 TRANSCRIBE_PROMPT = "Transcribe this audio exactly. Output only the transcript."
 
 
@@ -38,14 +40,6 @@ def pcm16_to_wav_bytes(pcm: np.ndarray, sample_rate: int = 16000) -> bytes:
 
 def pcm16_to_base64(pcm: np.ndarray, sample_rate: int = 16000) -> str:
     return base64.b64encode(pcm16_to_wav_bytes(pcm, sample_rate)).decode("ascii")
-
-
-def to_float32(pcm: np.ndarray) -> np.ndarray:
-    """int16 PCM -> float32 in [-1, 1] (Moonshine's ``add_audio`` input)."""
-    data = np.asarray(pcm)
-    if data.dtype == np.int16:
-        return data.astype(np.float32) / 32768.0
-    return data.astype(np.float32)
 
 
 def moonshine_dir(model: str) -> str:

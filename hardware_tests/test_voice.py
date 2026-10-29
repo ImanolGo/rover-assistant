@@ -18,7 +18,7 @@ import time
 
 from rover.config import load_config
 from rover.hal.audio import AlsaCapture, AlsaSpeaker
-from rover.voice.pipeline import VoiceLoop
+from rover.voice.pipeline import ThreadedWorker, VoiceLoop
 from rover.voice.stt import GemmaStt
 from rover.voice.tts import PiperTts
 from rover.voice.vad import SpeechSegmenter, load_silero
@@ -52,48 +52,49 @@ def main() -> int:
     def on_transcript(text: str) -> None:
         print(f"  transcript: {text!r}", flush=True)
 
+    intents: list = []
+
+    def on_intent(intent) -> None:
+        intents.append(intent)
+        print(
+            f"  intent: {intent.name} target={intent.target} attrs={intent.attributes}",
+            flush=True,
+        )
+
+    worker = ThreadedWorker(stt, tts=tts, on_intent=on_intent, on_transcript=on_transcript)
     loop = VoiceLoop(
         wakeword,
         segmenter,
-        stt,
-        tts=tts,
+        worker,
         speaker=speaker,
         wake_sound=config.voice.wake_sound,
-        on_transcript=on_transcript,
         flush=capture.flush,
         max_turn_s=config.voice.max_turn_s,
     )
+    worker.on_empty = loop.arm_continuation
+    worker.start()
 
     print("listening — say 'Hey Rover, go to the red cup'")
     deadline = time.time() + args.seconds
-    turns = 0
     last_status = 0.0
     try:
         while time.time() < deadline:
             frame = capture.read_frame()
             if frame is None:
                 break
-            started = time.perf_counter()
-            intent = loop.process_frame(frame)
+            loop.process_frame(frame)
             if args.verbose and time.time() - last_status > 1.0:
                 last_status = time.time()
                 print(
                     f"  [state={loop.state} wake_score={loop.wakeword.last_score:.2f}]",
                     flush=True,
                 )
-            if intent is not None:
-                turns += 1
-                elapsed = time.perf_counter() - started
-                print(
-                    f"  intent: {intent.name} target={intent.target} "
-                    f"attrs={intent.attributes} (turn done, +{elapsed:.2f}s)",
-                    flush=True,
-                )
     finally:
+        worker.close()
         capture.close()
         tts.close()
         stt.close()
-    print(f"done: {turns} turn(s)")
+    print(f"done: {len(intents)} turn(s)")
     return 0
 
 

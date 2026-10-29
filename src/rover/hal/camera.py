@@ -254,15 +254,10 @@ class Camera:
 def make_source(config: CameraConfig | None = None) -> FrameSource:
     """Build the frame source for the configured backend."""
     config = config or CameraConfig()
-    if config.backend == "csi":
-        return CsiSource(config)
-    if config.backend == "usb":
-        return UsbSource(config)
-    if config.backend == "file":
-        return FileSource(config)
-    if config.backend == "synthetic":
-        return SyntheticSource(config)
-    raise ValueError(f"unknown camera backend {config.backend!r}")
+    sources = {"csi": CsiSource, "usb": UsbSource, "file": FileSource, "synthetic": SyntheticSource}
+    if config.backend not in sources:
+        raise ValueError(f"unknown camera backend {config.backend!r}")
+    return sources[config.backend](config)
 
 
 def open_camera(config: CameraConfig | None = None, source: FrameSource | None = None) -> Camera:
