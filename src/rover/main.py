@@ -26,13 +26,6 @@ from rover.perception.detector import Detector, make_detector
 from rover.perception.geometry import CameraGeometry
 from rover.voice.intents import Intent, classify
 
-# States whose skill drives the wheels: only these arm barge-in stop (and mute the wake
-# word). describe / is_there / unknown / COMMAND do not move, so the wake word stays on.
-# Phase 5: follow actual wheel commands instead of the state name.
-MOTION_STATES = frozenset(
-    "FORWARD BACKWARD TURN_LEFT TURN_RIGHT TURN_AROUND RETURN_HOME GO_TO FOLLOW".split()
-)
-
 
 def select_source(config: RobotConfig) -> None:
     """In sim, replace the CSI backend (impossible on a laptop) with synthetic."""
@@ -195,7 +188,7 @@ class App:
                     speaking=lambda: loop.speaking,
                 )
             self._voice_loop = loop
-            loop.set_moving(self.state in MOTION_STATES)
+            loop.set_moving(bool(self.left or self.right))
             self._voice_pump = pump
             self._voice_worker = worker
             worker.start()
@@ -220,11 +213,19 @@ class App:
         print(f"voice: transcript={text!r}")
 
     def _set_state(self, state: str) -> None:
-        """Update state and tell the listener whether barge-in stop applies."""
         self.state = state
-        loop = self._voice_loop
-        if loop is not None:
-            loop.set_moving(state in MOTION_STATES)
+
+    def drive(self, left: float, right: float) -> None:
+        """Command the wheels (skills call this). Barge-in stop follows the *wheels*,
+        not the state name: a state whose skill never drove (every Phase 5 stub) left
+        the wake word muted until a spoken stop (2026-10-28/29 robot runs)."""
+        self.rover.drive(left, right)
+        self.left, self.right = float(left), float(right)
+        self._set_moving(bool(left or right))
+
+    def _set_moving(self, moving: bool) -> None:
+        if self._voice_loop is not None:
+            self._voice_loop.set_moving(moving)
 
     def _on_barge_stop(self) -> None:
         print("voice: barge-in stop")
@@ -288,6 +289,7 @@ class App:
             self._tts.cancel()  # stop also silences the robot mid-sentence
         self._set_state("STOPPED")
         self.left = self.right = 0.0
+        self._set_moving(False)
         with self._lock:
             self._snapshot = replace(self._snapshot, state=self.state, left=0.0, right=0.0)
 

@@ -123,17 +123,21 @@ def test_voice_go_to_intent_sets_state_and_status():
         app.close()
 
 
-def test_only_motion_intents_arm_barge_in():
-    # describe left the app "moving", which muted the wake word (2026-10-28 robot run).
+def test_barge_in_follows_the_wheels_not_the_intent():
+    # A motion intent with no skill behind it muted the wake word (2026-10-29 robot run).
     app = App(_sim_config(), detector=FakeDetector())
     calls: list[bool] = []
     app._voice_loop = type("Loop", (), {"set_moving": lambda self, m: calls.append(m)})()
     try:
-        app._on_intent(Intent(name="describe"))
-        app._on_intent(Intent(name="is_there", target="cup"))
         app._on_intent(Intent(name="turn_left"))
+        app._on_intent(Intent(name="describe"))
+        assert calls == []  # nothing drove the wheels: the wake word stays on
+        app.drive(-0.3, 0.3)
+        app.drive(0.0, 0.0)
+        app.drive(0.3, 0.3)
         app._on_intent(Intent(name="stop"))
-        assert calls == [False, False, True, False]
+        assert calls == [True, False, True, False]
+        assert app.rover.last_command == (0.0, 0.0)
     finally:
         app._voice_loop = None
         app.close()
