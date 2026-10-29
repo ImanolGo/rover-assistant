@@ -339,7 +339,16 @@ only ticks/jerks there, which still holds). **Heading must come from the integra
 z.** Closed loop on the gyro (`hardware_tests/test_yaw_turn.py`, 0.5, stop 10° early):
 left +95.1°, right −98.1° against ±90° (stopped at +82.8 / −88.2, coast ~10–12°). The
 operator saw two quarter turns ending at the start heading. Turn rate at 0.5 ≈ 150°/s.
-In-place turns need ~0.5, above the 0.35 cap (decision pending).
+In-place turns need ~0.5, above the 0.35 cap (decided: `spin_speed_cap`, decision log).
+
+**HAL heading (fc35aa7):** `SerialRover.heading_deg()` = integrated, bias-corrected gyro z
+(the writer polls `T=126` each cycle, and the reader integrates each `T=1002`; gaps > 0.25 s
+are skipped). Floor runs (`test_yaw_turn.py`, ±90° at 0.5, 10° lead): left +92.0 / right
+−97.9, then left +103.3 / right −83.3, and the operator confirmed the second run's ~20°
+net offset by eye. The coast after the stop varies, 2.6–13° (stop detection lags one
+~50 ms poll at ~150°/s), so a single committed spin lands within about ±13°. Small
+corrective spins stall, so Phase 5 should absorb the error with bearing-based arcs once
+the target is in view.
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
