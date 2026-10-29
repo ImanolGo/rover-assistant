@@ -309,6 +309,15 @@ boot-to-boot variance and shows the floor is not a single number.
   loading.
 - Still to verify: a spoken stop while the wheels actually move, and barge-in.
 
+**IMU on the floor** (`hardware_tests/test_imu.py`, 2026-10-29, robot still, 60 s, 743
+samples): roll −0.46° / pitch −0.11° (level), accelerometer z 975 mg (|a| ≈ 1 g), **yaw
+drift +0.02° / 60 s** (sd 0.48°; magnetometer-fused in firmware), gyro bias < 0.2 °/s.
+Raw gz has ±16 °/s single-sample spikes (64/743, mean ≈ 0), so skills should turn on the
+firmware yaw, not on integrated raw gyro. The 2026-10-28 on-box reading (roll −133°, pitch
+35°) came with |a| ≈ 23 mg, i.e. a bad IMU state, not a mounting tilt; the test now fails on
+|a| outside 900–1100 mg. **Still open:** yaw while the motors run (magnetometer vs motor
+current), the first Phase 5 floor motion test.
+
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
 |---|---|---|---|---|---|---|
