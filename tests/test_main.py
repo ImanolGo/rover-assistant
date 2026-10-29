@@ -116,7 +116,7 @@ def test_voice_go_to_intent_sets_state_and_status():
     try:
         app._on_intent(Intent(name="go_to", target="cup", attributes=("red",)))
         status = app.status()
-        assert app.state == "GO_TO"
+        assert app.state in ("GO_TO", "SEARCH")  # the mission thread takes over at once
         assert status["intent"] == "go_to"
         assert status["target"] == "cup"
     finally:
@@ -124,19 +124,18 @@ def test_voice_go_to_intent_sets_state_and_status():
 
 
 def test_barge_in_follows_the_wheels_not_the_intent():
-    # A motion intent with no skill behind it muted the wake word (2026-10-29 robot run).
+    # A motion state with no wheel command muted the wake word (2026-10-29 robot run).
     app = App(_sim_config(), detector=FakeDetector())
     calls: list[bool] = []
     app._voice_loop = type("Loop", (), {"set_moving": lambda self, m: calls.append(m)})()
     try:
-        app._on_intent(Intent(name="turn_left"))
-        app._on_intent(Intent(name="describe"))
-        assert calls == []  # nothing drove the wheels: the wake word stays on
+        app._set_state("TURN_LEFT")
+        assert calls == []  # a state name alone does not arm barge-in
         app.drive(-0.3, 0.3)
-        app.drive(0.0, 0.0)
+        app.halt()
         app.drive(0.3, 0.3)
-        app._on_intent(Intent(name="stop"))
-        assert calls == [True, False, True, False]
+        app.stop()
+        assert calls[:3] == [True, False, True] and calls[-1] is False
         assert app.rover.last_command == (0.0, 0.0)
     finally:
         app._voice_loop = None
@@ -159,7 +158,7 @@ def test_empty_command_is_rejected():
     try:
         assert app.submit_command("   ") is False
         assert app.submit_command("go to the cup") is True
-        assert app.state == "COMMAND"
+        assert app.last_intent.name == "go_to"
     finally:
         app.close()
 

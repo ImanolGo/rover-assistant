@@ -138,6 +138,5 @@ def test_intent_is_a_dataclass_with_raw_text():
     assert intent.response == "Turning left."
 
 
-def test_unbuilt_skills_say_so():
-    for text in ("what do you see", "is there a red cup"):
-        assert classify(text).response == NOT_YET
+def test_return_home_says_it_cannot():
+    assert classify("go home").response == NOT_YET  # no odometry to find home with

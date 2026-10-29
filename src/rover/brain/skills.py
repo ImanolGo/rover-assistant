@@ -33,7 +33,9 @@ def approach(bearing_deg: float, h_frac: float, h_stop: float, half_fov_deg: flo
     """``(left, right)`` to close on a target, or ``None``: re-aim with a spin first."""
     if abs(bearing_deg) >= control.approach_max_bearing_deg:
         return None
-    fwd = control.v_max * _clamp(1.0 - h_frac / h_stop, 0.0, 1.0) if h_stop > 0 else 0.0
+    # Not proportional: the HAL zeroes < 0.15 and floors the rest at 0.30, so a
+    # slowing ramp stopped the robot at ~57% of h_stop, short of VERIFY.
+    fwd = control.v_max if h_frac < h_stop else 0.0
     return steer(bearing_deg, fwd, half_fov_deg, control)
 
 

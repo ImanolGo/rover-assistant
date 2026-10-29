@@ -19,11 +19,15 @@ from dataclasses import replace
 from typing import Any
 
 from rover.api.server import VideoSnapshot, create_app
+from rover.brain.mission import Mission
+from rover.brain.planner import GemmaClient
+from rover.brain.selector import RuleSelector
 from rover.config import DEFAULT_CONFIG_PATH, RobotConfig, load_config
 from rover.hal.camera import FrameSource, open_camera
 from rover.hal.rover import Rover, open_rover
 from rover.perception.detector import Detector, make_detector
 from rover.perception.geometry import CameraGeometry
+from rover.telemetry.decisions import DecisionLog
 from rover.voice.intents import Intent, classify
 
 
@@ -77,6 +81,17 @@ class App:
         self._frames = 0
         self._last_frame_time = 0.0
         self._last_t_capture: float | None = None
+        self.gemma = GemmaClient(config.planner)
+        self.mission = Mission(
+            self,
+            self.gemma,
+            RuleSelector(config.control),
+            DecisionLog(config.telemetry.decisions_dir),
+            config.control,
+            spin_speed=config.rover.spin_speed_cap,
+            half_fov_deg=self.geometry.fov_h_deg() / 2.0,
+            h_stops=config.perception.target_classes_h_stop,
+        )
 
     # --- perception loop -----------------------------------------------------
 
@@ -236,8 +251,65 @@ class App:
         print(f"voice: intent={intent.name} target={intent.target} attrs={intent.attributes}")
         if intent.name == "stop":
             self.stop()
-        else:
-            self._set_state(intent.name.upper())
+            return
+        self._set_state(intent.name.upper())
+        args = (intent.name, intent.target, tuple(intent.attributes), intent.raw)
+        self.mission.start(self._execute, *args)
+
+    def _execute(self, name: str, target=None, attributes=(), raw: str = "") -> None:
+        """Run one intent/tool on the mission thread (the planner maps free text here)."""
+        m, v = self.mission, self.config.control.v_max
+        if name == "go_to":
+            m.go_to(target, attributes) if target else self.say("Where should I go?")
+        elif name in ("follow", "follow_person"):
+            self.say("Following you.")
+            m.follow()
+        elif name in ("describe", "is_there"):
+            m.describe(raw or "What do you see?")
+        elif name in ("turn_left", "turn_right", "turn_around"):
+            m.turn({"turn_left": 90.0, "turn_right": -90.0, "turn_around": 180.0}[name])
+        elif name in ("forward", "backward"):
+            m.nudge(v if name == "forward" else -v)
+        elif name == "unknown" and raw:
+            call = self.gemma.plan(raw)
+            if call is None:
+                self.say("Sorry, I didn't understand.")
+            elif call.tool == "stop":
+                self.stop()
+            elif call.tool == "say":
+                self.say(str(call.args.get("text", "")))
+            elif call.tool == "turn":
+                left = str(call.args.get("direction", "left")).lower() != "right"
+                degrees = float(call.args.get("degrees", 90) or 90)
+                m.turn(degrees if left else -degrees)
+            else:
+                attributes = tuple(call.args.get("attributes") or ())
+                question = str(call.args.get("question") or raw)
+                self._execute(call.tool, call.args.get("target"), attributes, question)
+
+    # --- the mission's body ----------------------------------------------------
+
+    def halt(self) -> None:
+        self.drive(0.0, 0.0)
+
+    def heading_deg(self) -> float:
+        return self.rover.heading_deg()
+
+    def set_state(self, state: str) -> None:
+        self._set_state(state)
+
+    def say(self, text: str) -> None:
+        print(f"say: {text}", flush=True)
+        loop, tts = self._voice_loop, self._tts
+        if tts is None or not text:
+            return
+        if loop is not None:
+            loop.set_speaking(True)
+        try:
+            tts.say(text)
+        finally:
+            if loop is not None:
+                loop.set_speaking(False)
 
     # --- ApiContext ----------------------------------------------------------
 
@@ -277,16 +349,18 @@ class App:
         if not text:
             return False
         self.last_command = text
-        if classify(text).name == "stop":
-            self.stop()
-            return True
-        self._set_state("COMMAND")
+        intent = classify(text)
+        if intent.name != "stop" and intent.response:
+            threading.Thread(target=self.say, args=(intent.response,), daemon=True).start()
+        self._on_intent(intent)  # same path as voice; "stop" first
         return True
 
     def stop(self) -> None:
+        self.mission.cancel(join=False)  # first: no mission drive can follow the stop
         self.rover.stop()
         if self._tts is not None:
             self._tts.cancel()  # stop also silences the robot mid-sentence
+        self.mission.cancel()
         self._set_state("STOPPED")
         self.left = self.right = 0.0
         self._set_moving(False)
@@ -296,6 +370,8 @@ class App:
     # --- lifecycle -----------------------------------------------------------
 
     def close(self) -> None:
+        self.mission.cancel()
+        self.gemma.close()
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)

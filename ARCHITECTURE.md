@@ -84,7 +84,7 @@ the future option for barge-in *during* speech. See STATUS §Phase 4 voice v3.
    - If the target is not in the detector vocabulary, or a full turn finds nothing, ask Gemma once per pause.
 2. `APPROACH`
    - `turn = Kp · bearing/half_fov`, with a dead-band of ±3°.
-   - `fwd = v_max · clamp(1 − h_frac/h_stop[class], 0, 1)` while |bearing| < 15°; otherwise turn in place (a committed gyro-stopped spin at `spin_speed_cap`: small proportional in-place turns stall on a hard floor).
+   - `fwd = v_max` while `h_frac < h_stop[class]` and |bearing| < 15° (not a ramp: with the 0.30 floor and 0.35 cap a slowing ramp stalls short of the target; 2026-10-29); otherwise turn in place (a committed gyro-stopped spin at `spin_speed_cap`: small proportional in-place turns stall on a hard floor).
    - Low-pass L/R, then the rover HAL applies the deadband mapping.
 3. `REACQUIRE`
    - Triggered when the track is lost for more than 1 s.

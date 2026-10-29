@@ -61,11 +61,12 @@ def test_state_as_text_is_flat_and_drops_empty_fields():
     assert "last_skill=SEARCH" in text and "verify_result" not in text
 
 
-def test_approach_arcs_toward_the_target_and_slows_near_it():
+def test_approach_arcs_toward_the_target_and_stops_at_h_stop():
     left, right = skills.approach(10.0, 0.1, 0.5, 31.0, CONTROL)
     assert left > right > 0  # target to the right: arc right while moving
+    assert skills.approach(0.0, 0.3, 0.5, 31.0, CONTROL) == (CONTROL.v_max, CONTROL.v_max)
     left, right = skills.approach(0.0, 0.5, 0.5, 31.0, CONTROL)
-    assert left == right == 0.0  # arrived: no forward
+    assert left == right == 0.0  # arrived: no forward (no slowing ramp: the floor is 0.30)
     assert skills.approach(40.0, 0.1, 0.5, 31.0, CONTROL) is None  # re-aim with a spin
 
 

@@ -21,6 +21,7 @@ class RuleSelector:
         self.follow_give_up_s = float(getattr(control, "follow_lost_give_up_s", 5.0))
         self.search_max_steps = int(getattr(control, "search_max_steps", 12))
         self.max_replans = int(getattr(control, "max_replans", 2))
+        self.max_mission_s = float(getattr(control, "max_mission_s", 120.0))
 
     def select(self, s: WorldState) -> Skill:
         if s.mission == "follow":
@@ -29,6 +30,8 @@ class RuleSelector:
             return Skill.ABORT if s.lost_for_s > self.follow_give_up_s else Skill.REACQUIRE
         if s.mission != "go_to":
             return Skill.DONE
+        if s.elapsed_s > self.max_mission_s:
+            return Skill.ABORT
         if s.verify_result is True:
             return Skill.DONE
         if s.verify_result is False:
