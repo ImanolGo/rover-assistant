@@ -126,25 +126,8 @@ TOOLS = [
     },
 ]
 
-FEWSHOT = """You convert a spoken robot command into exactly one JSON tool call.
-Output ONLY the JSON object, nothing else.
-Tools: go_to(target[, attributes]), follow_person(), describe(question),
-stop(), turn(direction[, degrees]), say(text).
-Examples:
-User: go to the kitchen
-{{"tool": "go_to", "target": "kitchen"}}
-User: follow me
-{{"tool": "follow_person"}}
-User: what do you see
-{{"tool": "describe", "question": "what do you see"}}
-User: stop
-{{"tool": "stop"}}
-User: turn left ninety degrees
-{{"tool": "turn", "direction": "left", "degrees": 90}}
-User: say hello
-{{"tool": "say", "text": "hello"}}
-User: {cmd}
-"""
+# The runtime prompt: bench 1.9 measures exactly what the planner sends.
+from rover.brain.planner import FEWSHOT  # noqa: E402
 
 
 def bench_jinja() -> list[dict]:

@@ -1,6 +1,6 @@
 # STATUS.md
 
-**Current phase:** pre-5 fix pass (audit 2026-10-28) → then 5 — Brain: planner, skills, state machine
+**Current phase:** 5 — Brain: planner, skills, state machine (started 2026-10-29)
 **Last updated:** 2026-10-28 (audit fixes; audio fixes; B1 real-mic benchmark; Moonshine small default + soak; first `rover` voice run; 8744ea0)
 **Device:** Jetson Orin Nano 8 GB Super · JetPack 6.2 (L4T 36.4.7) · MAXN SUPER
 
@@ -494,6 +494,7 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 | 2026-10-28 | **`voice.speex_noise_suppression` true → false** (operator decision) | `speexdsp_ns` was never installed (it needs `libspeexdsp-dev` and a source build), so openWakeWord raised at startup and voice inside `rover` never ran. Every wake-word test so far ran without speex. `voice disabled: …` is now flushed to the log | first `rover` voice run on hardware, 2026-10-28 |
 | 2026-10-29 | **Barge-in stop stays Moonshine-only** (operator decision); mic upgrade planned | live wheels-spinning test (`hardware_tests/test_barge_stop.py`, Moonshine small): 3/5, then 6/8 with only 2/8 caught at the first attempt; the usual miss is "stop" → "Up." (the motor noise masks the "st"), and hits came ~1.5 s after voice onset. An offline replay of the 8 recordings through Silero (200 ms end silence, 1 s cap) → Gemma caught the first stop in 8/8, but it was **not adopted**: it would share llama-server's single slot with vision queries during skills. The fix is better audio in (a mic array / AEC device), re-measured with the same test | `bench/data/barge_2026-10-28/` (Jetson), Known issue 18 |
 | 2026-10-29 | **`rover.spin_speed_cap: 0.5` for in-place spins; drive cap stays 0.35; heading from the integrated gyro** (operator decision) | hard-floor field test: spins at 0.30–0.45 only ticked or jerked, forward at 0.30 drove fine (scrub, not power), and 0.5 spins about 150°/s. The firmware yaw read +5° for a near-full circle (magnetometer anchored to the robot's own field). A gyro-z closed loop gave +95° / −98° for ±90° and ended at the start heading (operator). The HAL lets only opposite, equal (±0.05) commands use the spin cap; arcs stay at 0.35. AGENTS rule 4 and ARCHITECTURE §4 and §8 are updated | `hardware_tests/test_yaw_turn.py`; `tests/test_rover.py` |
+| 2026-10-29 | **src/ budget `< 3,500` → `< 4,500` lines for v1, including Phase 5** (operator decision) | 3,514 after the deletion pass plus the HAL gyro heading; Phase 5 (planner, skills, selector ≤ 60, verify, mission loop, decision log) is estimated at ~850–950 lines. A deletion pass still runs at the end of each phase | `find src -name '*.py' \| xargs cat \| wc -l` |
 | 2026-10-28 | `planner.mode` default → `completion_fewshot` | matches the bench 1.9 decision (90% vs 83%); the config still said `jinja_tools` | bench 1.9 row above |
 
 ## Known issues
