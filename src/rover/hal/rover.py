@@ -26,6 +26,8 @@ DEFAULT_WHEELBASE_M = 0.16
 DEFAULT_MAX_LINEAR_VELOCITY = 0.3
 DEFAULT_MAX_SPEED = 0.5
 _GYRO = ("gx", "gy", "gz")
+SPIN_DEG_S_PER_UNIT = 300.0  # sim: measured ~150 deg/s spinning at 0.5 (2026-10-29)
+MAX_GYRO_GAP_S = 0.25  # do not integrate across a feedback gap longer than this
 
 
 @dataclass
@@ -74,8 +76,8 @@ def twist_to_wheel_speeds(
     """Map (linear, angular) velocities to normalized left/right wheel speeds.
 
     Differential-drive kinematics; an optional deadband floor in
-    ``(0, min_wheel_pwm)`` is raised to ``min_wheel_pwm`` (measured on the
-    robot: in-place rotation only starts around 0.3, i.e. ~60% PWM).
+    ``(0, min_wheel_pwm)`` is raised to ``min_wheel_pwm`` (wheels start around 0.3
+    wheels-up; on a hard floor an in-place spin needs ~0.5, see ``spin_speed_cap``).
     """
     v_left = linear_vel - (angular_vel * wheelbase) / 2.0
     v_right = linear_vel + (angular_vel * wheelbase) / 2.0
@@ -106,6 +108,14 @@ class Rover(Protocol):
         """Last feedback battery voltage in volts, or None if unknown."""
         ...
 
+    def heading_deg(self) -> float:
+        """Integrated gyro-z heading in degrees since startup, + = left (CCW).
+
+        Unwrapped (keeps counting past ±180). The firmware yaw is not used: it is
+        anchored to the robot's own magnetic field and does not track rotation.
+        """
+        ...
+
     def close(self) -> None:
         """Stop and release resources."""
         ...
@@ -133,17 +143,28 @@ class DryRunRover:
         self.commands: list[tuple[float, float, float]] = []
         self._battery_v: float | None = 12.2
         self._closed = False
+        self._heading = 0.0
+        self._rate_since = (0.0, time.monotonic())  # (deg/s, since) of the last command
 
     def drive(self, left: float, right: float) -> None:
         if self._closed:
             raise RuntimeError("rover is closed")
-        self.commands.append((time.time(), *_limit_pair(left, right, self.config)))
+        limited = _limit_pair(left, right, self.config)
+        self.commands.append((time.time(), *limited))
+        self._heading = self.heading_deg()  # bank the turn so far, then change rate
+        rate = SPIN_DEG_S_PER_UNIT * (limited[1] - limited[0]) / 2.0
+        self._rate_since = (rate, time.monotonic())
 
     def stop(self) -> None:
         self.drive(0.0, 0.0)
 
     def battery(self) -> float | None:
         return self._battery_v
+
+    def heading_deg(self) -> float:
+        """Simulated: turn rate from the commanded wheel difference (no watchdog)."""
+        rate, since = self._rate_since
+        return self._heading + rate * (time.monotonic() - since)
 
     def close(self) -> None:
         self._closed = True
@@ -180,9 +201,8 @@ class SerialRover:
         self._target = (0.0, 0.0)
         self._target_time = 0.0
         self._battery_v: float | None = None
-        self._roll_deg = 0.0
-        self._pitch_deg = 0.0
-        self._yaw_deg: float | None = None
+        self._heading = 0.0
+        self._last_gyro_t: float | None = None
         self._gyro_dps = (0.0, 0.0, 0.0)
         self._gyro_bias_rad_s = (0.0, 0.0, 0.0)
         self._closing = threading.Event()
@@ -226,9 +246,8 @@ class SerialRover:
     def battery(self) -> float | None:
         return self._battery_v
 
-    def heading_deg(self) -> float | None:
-        """Last yaw from feedback, in degrees (None until the first frame)."""
-        return self._yaw_deg
+    def heading_deg(self) -> float:
+        return self._heading
 
     def gyro_rad_s(self) -> tuple[float, ...]:
         """Last raw angular velocity ``(gx, gy, gz)`` in rad/s."""
@@ -260,7 +279,6 @@ class SerialRover:
                     response = self.parse_feedback(line.decode("utf-8", errors="ignore"))
                     if response and response.get("T") == 1002 and set(_GYRO) <= response.keys():
                         samples.append(tuple(float(response[k]) for k in _GYRO))
-                        self._update_attitude(response)
                         break
                 time.sleep(0.02)
         finally:
@@ -278,6 +296,8 @@ class SerialRover:
             if not fresh:
                 left = right = 0.0
             self._send({"T": 1, "L": left, "R": right})
+            if self.config.feedback:
+                self._send({"T": 126})  # IMU poll: its T=1002 reply drives heading_deg()
             time.sleep(period)
 
     @staticmethod
@@ -292,23 +312,18 @@ class SerialRover:
         except json.JSONDecodeError:
             return None
 
-    def _update_attitude(self, response: dict[str, Any]) -> None:
-        """Store roll/pitch/yaw (degrees) when present (T=1001 and T=1002)."""
-        for key, attr in (("r", "_roll_deg"), ("p", "_pitch_deg"), ("y", "_yaw_deg")):
-            if key in response:
-                setattr(self, attr, float(response[key]))
-
     def handle_feedback(self, response: dict[str, Any]) -> None:
-        """Apply a T=1001/1002/130 feedback object (battery, attitude, gyro)."""
+        """Apply a T=1001/130 (battery) or T=1002 (IMU: integrate gyro z) object."""
         kind = response.get("T")
-        if kind in (1001, 130):
-            if "v" in response:
-                self._battery_v = float(response["v"])
-            self._update_attitude(response)
-        elif kind == 1002:
-            self._update_attitude(response)
-            if set(_GYRO) <= response.keys():
-                self._gyro_dps = tuple(float(response[k]) for k in _GYRO)
+        if kind in (1001, 130) and "v" in response:
+            self._battery_v = float(response["v"])
+        elif kind == 1002 and set(_GYRO) <= response.keys():
+            self._gyro_dps = tuple(float(response[k]) for k in _GYRO)
+            now = time.monotonic()
+            if self._last_gyro_t is not None and now - self._last_gyro_t <= MAX_GYRO_GAP_S:
+                rate = self._gyro_dps[2] - math.degrees(self._gyro_bias_rad_s[2])
+                self._heading += rate * (now - self._last_gyro_t)
+            self._last_gyro_t = now
 
     def _read_loop(self) -> None:
         while not self._closing.is_set():
