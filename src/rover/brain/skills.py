@@ -39,11 +39,18 @@ def approach(bearing_deg: float, h_frac: float, h_stop: float, half_fov_deg: flo
     return steer(bearing_deg, fwd, half_fov_deg, control)
 
 
-def follow(bearing_deg: float, h_frac: float, half_fov_deg: float, control) -> tuple:
-    """Keep a person centred, and ``h_frac`` inside ``control.follow_h_frac``."""
+def follow(bearing_deg: float, h_frac: float, half_fov_deg: float, control):
+    """Keep ``h_frac`` inside ``control.follow_h_frac``, steering only while moving.
+
+    In range there is no steering (it would be a weak proportional spin: opposite
+    wheels that stall on the floor, "back and forward" wheels-up); ``None`` means
+    re-aim with a committed spin because the person is far off-centre.
+    """
     low, high = control.follow_h_frac
     fwd = control.v_max if h_frac < low else (-control.v_max if h_frac > high else 0.0)
-    return steer(bearing_deg, fwd, half_fov_deg, control)
+    if fwd:
+        return steer(bearing_deg, fwd, half_fov_deg, control)
+    return None if abs(bearing_deg) >= control.approach_max_bearing_deg else (0.0, 0.0)
 
 
 def spin(

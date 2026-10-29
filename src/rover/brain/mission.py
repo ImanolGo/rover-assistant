@@ -19,6 +19,9 @@ from rover.brain.state import Skill, WorldState
 from rover.brain.verify import verify_arrival
 from rover.perception.color import COLOR_RANGES, matches_color
 
+HOLD_S = 0.5  # keep the last detection this long: YOLO flickered a real cup on/off
+# every other tick, and each "lost" halted the wheels (robot run 2026-10-29)
+
 
 class _Motor:
     """What :mod:`skills` drives: the body's wheels, with ``stop`` = halt (not abort).
@@ -120,15 +123,19 @@ class Mission:
         s.h_stop = float(self.h_stops.get(s.target, s.h_stop))
         if s.mission == "go_to":
             self.body.say(f"Looking for the {goal}.")
-        started, last_seen = time.monotonic(), None
+        started, last_seen, last_hit = time.monotonic(), None, None
         while not self.cancelled():
             snap = self.body.snapshot()
             hit = self._match(snap, s.target, s.attributes)
             now = time.monotonic()
+            if hit is not None:
+                last_hit, last_seen = hit, now
+            elif last_seen is not None and now - last_seen <= HOLD_S:
+                hit = last_hit  # a dropout, not a loss
             s.elapsed_s = now - started
             s.target_visible = hit is not None
             if hit is not None:
-                last_seen, s.lost_for_s = now, 0.0
+                s.lost_for_s = 0.0
                 s.bearing_deg = s.last_bearing_deg = hit.bearing_deg
                 s.h_frac = hit.h_frac
             else:
@@ -166,6 +173,8 @@ class Mission:
             return f"drive {command[0]:+.2f} {command[1]:+.2f}"
         if skill is Skill.FOLLOW:
             command = skills.follow(s.bearing_deg, s.h_frac, self.half_fov, c)
+            if command is None:  # in range but off to the side: re-aim in place
+                return f"re-aim {self.turn_toward(s.bearing_deg):.0f}"
             self.motor.drive(*command)
             return f"drive {command[0]:+.2f} {command[1]:+.2f}"
         if skill is Skill.REACQUIRE:

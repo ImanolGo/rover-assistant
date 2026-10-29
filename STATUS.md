@@ -350,6 +350,21 @@ net offset by eye. The coast after the stop varies, 2.6–13° (stop detection l
 corrective spins stall, so Phase 5 should absorb the error with bearing-based arcs once
 the target is in view.
 
+**Phase 5 wheels-up run** (Jetson, 2026-10-29, robot on a box, operator with a blue cup;
+`rover` = camera + YOLO + Moonshine small + brain, llama-server up):
+- **Voice → intent → mission worked for all three behaviours**, and barge-in stop ended
+  each mission. `describe` answered in ~2 s ("a person standing in what appears to be a
+  room, and a television").
+- **go_to stuttered:** the cup flickered visible/lost 92 times in 19 s, and each loss
+  halted the wheels via REACQUIRE. Fix: hold the last detection 0.5 s (`HOLD_S`).
+  Wheels-up the cup never grew (h 0.12–0.17 vs h_stop 0.4), so the mission never
+  arrived; that needs the floor.
+- **follow went "back and forward":** in the distance band, `steer()` still applied the
+  bearing term with fwd = 0, i.e. a weak proportional in-place spin. Fix: no steering in
+  band; far off-centre → committed spin.
+- Stopping follow took "several" shouts with the wheels spinning (Known issue 18).
+- Known issue 21.
+
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
 |---|---|---|---|---|---|---|
@@ -518,3 +533,4 @@ routing through `Router` internals caused a ~10.8 s/call hub round-trip.
 18. **Spoken stop range is short.** On the B1 sets every model hears near takes, but Moonshine small returns empty transcripts beyond roughly the 9th of 20 stepped-back takes (quiet) / 5th (wheels running). Gemma manages 12 / 8. The operator was ~7 m away at the last take. Wheel noise at 0.30 is about as loud as speech at the mic. **Live with the wheels spinning (2026-10-28, close, loud):** 6/8 stopped (2/8 at the first word, the rest after repeats), 2.9–5.8 s from cue to stop; "stop" is mostly heard as "Up." Never rely on voice alone to stop the robot: `/stop` and the 0.5 s watchdog are the guarantee. Improving it needs a better mic or mic placement (gain is not the limit, §Phase 4 voice v4). Re-check with the wheels on the floor.
 19. **Resolved 2026-10-28 (cable reseated, reboot; IMX219 bound on port 10).** Was: **CSI camera not detected on the 2026-10-28 boot:** `imx219 … error during i2c read probe (-121)` on both ports, no `/dev/video0`; `rover` ran with `fps 0`. This is a hardware or connection fault (ribbon cable). The operator is reseating it and rebooting.
 20. **Fixed 2026-10-28 (eb9361c):** barge-in killed the voice thread. On a non-stop segment `BargeInStop` called `final()` (stop + close), then `reset()` → `cancel()` → `stop()` on the closed Moonshine stream; libmoonshine raised `ctypes.ArgumentError` (None handle). Any state other than IDLE/STOPPED counts as moving, and `describe` leaves the app in `DESCRIBE` (Phase 5 skills are stubs), so the first `describe` turn armed barge-in. The capture queue then dropped ~16.5k frames. `_MoonshineStream` now closes once. Regression test in `tests/test_voice.py`. **Resolved 2026-10-29:** barge-in now follows the wheels. `App.drive(left, right)` (the skills' entry point) arms it on a nonzero command, and `drive(0, 0)` / `stop()` disarm it. The intermediate state-name fix (d346b06) still muted the wake word after "turn left", whose skill is a stub (robot run 2026-10-29). `describe` / `is_there` reply "I can't do that yet."
+21. **Argus `InsufficientMemory` during a Gemma vision query** (Phase 5 wheels-up run, 2026-10-29): `NvMap error 12` / `IImageNativeBuffer not supported` from the camera at the moment `describe` sent an image. The camera recovered (14.5 fps afterwards), but CmaFree read **2.3 MB** after the run (117 MB at start). Vision queries and the camera compete for CMA. Watch it in the Phase 6 soak; the same family as Known issues 1 and 12.

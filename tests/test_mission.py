@@ -152,3 +152,18 @@ def test_gemma_down_is_a_soft_failure(tmp_path):
     assert body.states[-2:] == ["ABORT", "IDLE"] and body.said[-1] == "I couldn't find the cup."
     _run(mission, mission.describe, "What do you see?")
     assert body.said[-1] == "Sorry, I can't tell right now."
+
+
+def test_a_flickering_detection_does_not_halt_the_approach(tmp_path):
+    seen = iter([True, False] * 200)  # YOLO on/off every tick, as on the robot
+
+    def world(body):
+        return [_det(h_frac=0.2)] if next(seen, True) else []
+
+    body = Body(world)
+    mission = _mission(body, Gemma(), tmp_path)
+    mission.start(mission.go_to, "cup")
+    time.sleep(0.3)
+    mission.cancel()
+    assert "REACQUIRE" not in body.states  # dropouts shorter than HOLD_S are not a loss
+    assert body.drives and all(d != (0.0, 0.0) for d in body.drives[:-1])

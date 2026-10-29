@@ -75,6 +75,8 @@ def test_follow_keeps_the_band():
     assert skills.follow(0.0, low - 0.1, 31.0, CONTROL)[0] > 0  # too far: forward
     assert skills.follow(0.0, high + 0.1, 31.0, CONTROL)[0] < 0  # too close: back
     assert skills.follow(0.0, (low + high) / 2, 31.0, CONTROL) == (0.0, 0.0)
+    assert skills.follow(10.0, (low + high) / 2, 31.0, CONTROL) == (0.0, 0.0)  # no in-place nudge
+    assert skills.follow(40.0, (low + high) / 2, 31.0, CONTROL) is None  # re-aim with a spin
 
 
 def test_spin_turns_by_the_heading_and_stops(monkeypatch):
