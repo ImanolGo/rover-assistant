@@ -315,8 +315,18 @@ drift +0.02° / 60 s** (sd 0.48°; magnetometer-fused in firmware), gyro bias < 
 Raw gz has ±16 °/s single-sample spikes (64/743, mean ≈ 0), so skills should turn on the
 firmware yaw, not on integrated raw gyro. The 2026-10-28 on-box reading (roll −133°, pitch
 35°) came with |a| ≈ 23 mg, i.e. a bad IMU state, not a mounting tilt; the test now fails on
-|a| outside 900–1100 mg. **Still open:** yaw while the motors run (magnetometer vs motor
-current), the first Phase 5 floor motion test.
+|a| outside 900–1100 mg.
+
+**Turning in place on the floor fails** (`hardware_tests/test_yaw_turn.py`, 2026-10-29,
+hard floor, battery 11.1–11.4 V; operator watching): commanded spins of 6 s at **0.30,
+0.35, 0.40 and 0.45** produced only ticks or small jerks. By IMU yaw measured after each
+stop: 0.30 ≈ 0°, 0.35 ≈ −1°, 0.40 ≈ −10°, 0.45 ≈ −19°, against 90° asked. **Forward at
+0.30 drives fine**, and the battery reading stayed flat (11.14 V), so this is skid-steer
+scrub torque, not power. **Yaw under motor current:** while the motors were commanded (even
+stalled) the yaw read 2–3° off and recovered within ~1 s of stopping. At 0.45 the yaw
+during the spin under-read the post-stop value by ~11°, so a turn loop that stops on
+live yaw will under-turn; settle before trusting it. Turning strategy is a Phase 5
+input (see the decision log once chosen).
 
 ### Components in isolation
 | Component | Config | p50 | p90 | Throughput | Peak RSS | Notes |
