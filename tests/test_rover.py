@@ -111,6 +111,17 @@ def test_dryrun_applies_deadband_floor():
     assert rover.last_command == (pytest.approx(0.3), pytest.approx(-0.3))
 
 
+def test_spin_in_place_may_exceed_the_drive_cap_but_arcs_may_not():
+    # On a hard floor nothing below ~0.5 spins the robot (2026-10-29 field test).
+    rover = DryRunRover(RoverConfig(speed_cap=0.35, spin_speed_cap=0.5, min_wheel_pwm=0.3))
+    rover.drive(-0.5, 0.5)  # in-place spin
+    assert rover.last_command == (pytest.approx(-0.5), pytest.approx(0.5))
+    rover.drive(0.5, 0.5)  # straight: drive cap
+    assert rover.last_command == (pytest.approx(0.35), pytest.approx(0.35))
+    rover.drive(-0.1, 0.5)  # opposite signs but not a spin: drive cap
+    assert rover.last_command == (0.0, pytest.approx(0.35))
+
+
 def test_dryrun_battery_and_closed():
     rover = DryRunRover()
     assert rover.battery() == pytest.approx(12.2)

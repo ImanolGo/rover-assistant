@@ -26,7 +26,11 @@ testable Python project.
 4. **Motors are dangerous.**
    - Default rover speed cap is `0.35` (on the firmware's 0.5 scale): the 0.30 deadband
      floor plus a 0.05 proportional band. Was 0.15, which the floor made unreachable
-     (STATUS decision log 2026-10-28). Raise only after field tests.
+     (STATUS decision log 2026-10-28). Raise only after field tests. Exception: an in-place
+     spin (opposite, equal wheel commands) may use `spin_speed_cap` 0.5, because skid-steer
+     stalls below ~0.5 on a hard floor (field test, STATUS decision log 2026-10-29).
+   - Heading comes from the integrated gyro z, **not** the firmware yaw (that follows the
+     robot's own magnetic field and barely moves when the robot turns).
    - The rover writer must stop the wheels if no command arrives for 0.5 s.
    - "stop" is handled by regex **before** any model runs.
    - First run of any motion code is wheels-up (robot on a box).

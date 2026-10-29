@@ -84,7 +84,7 @@ the future option for barge-in *during* speech. See STATUS §Phase 4 voice v3.
    - If the target is not in the detector vocabulary, or a full turn finds nothing, ask Gemma once per pause.
 2. `APPROACH`
    - `turn = Kp · bearing/half_fov`, with a dead-band of ±3°.
-   - `fwd = v_max · clamp(1 − h_frac/h_stop[class], 0, 1)` while |bearing| < 15°; otherwise turn in place.
+   - `fwd = v_max · clamp(1 − h_frac/h_stop[class], 0, 1)` while |bearing| < 15°; otherwise turn in place (a committed gyro-stopped spin at `spin_speed_cap`: small proportional in-place turns stall on a hard floor).
    - Low-pass L/R, then the rover HAL applies the deadband mapping.
 3. `REACQUIRE`
    - Triggered when the track is lost for more than 1 s.
@@ -185,6 +185,8 @@ rover-assistant/
 ## 8. Safety
 
 - Speed cap `0.35` on the 0.5 scale by default (0.30 deadband floor + 0.05 band; commands below 0.15 become 0, 0.15–0.30 become 0.30).
+- In-place spins (opposite, equal wheel commands) may use `spin_speed_cap` `0.5`: on a hard floor skid-steer scrub stalls anything lower. They are committed turns, stopped by the integrated gyro, with a timeout. Proportional steering is done as arcs while driving, inside the 0.35 cap.
+- Heading = integrated, bias-corrected gyro z. The firmware yaw is magnetometer-anchored to the robot's own field and does not track rotation (STATUS 2026-10-29).
 - Watchdog of 0.5 s in the brain, plus the firmware heartbeat (verify its timeout in Phase 2).
 - The "stop" regex runs before anything else. `/stop` on the API does the same.
 - Low battery (from T=131 feedback, below the threshold) → refuse motion and announce it.

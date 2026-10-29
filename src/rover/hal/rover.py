@@ -39,6 +39,7 @@ class RoverConfig:
     write_hz: float = 20.0
     watchdog_s: float = 0.5
     speed_cap: float = 0.35
+    spin_speed_cap: float = 0.5  # in-place spins only (opposite, equal wheels); see _limit_pair
     min_wheel_pwm: float = 0.30
     feedback: bool = True
     gyro_bias_calibrate_s: float = 2.0
@@ -110,10 +111,18 @@ class Rover(Protocol):
         ...
 
 
-def _limit_command(value: float, config: RoverConfig) -> float:
-    """Clamp a request to the safety cap, then compensate the deadband."""
-    capped = _clamp(value, -config.speed_cap, config.speed_cap)
-    return compensate_deadband(capped, config.min_wheel_pwm)
+def _limit_pair(left: float, right: float, config: RoverConfig) -> tuple[float, float]:
+    """Clamp a request to the safety cap, then compensate the deadband.
+
+    An in-place spin (opposite signs, equal magnitude within 0.05) may use
+    ``spin_speed_cap``: on a hard floor skid-steer scrub stalls anything below ~0.5
+    (STATUS 2026-10-29). Everything else, including arcs, stays at ``speed_cap``.
+    """
+    spin = left * right < 0 and abs(abs(left) - abs(right)) <= 0.05
+    cap = config.spin_speed_cap if spin else config.speed_cap
+    return tuple(  # type: ignore[return-value]
+        compensate_deadband(_clamp(v, -cap, cap), config.min_wheel_pwm) for v in (left, right)
+    )
 
 
 class DryRunRover:
@@ -128,9 +137,7 @@ class DryRunRover:
     def drive(self, left: float, right: float) -> None:
         if self._closed:
             raise RuntimeError("rover is closed")
-        self.commands.append(
-            (time.time(), _limit_command(left, self.config), _limit_command(right, self.config))
-        )
+        self.commands.append((time.time(), *_limit_pair(left, right, self.config)))
 
     def stop(self) -> None:
         self.drive(0.0, 0.0)
@@ -207,7 +214,7 @@ class SerialRover:
 
     def drive(self, left: float, right: float) -> None:
         with self._lock:
-            self._target = (_limit_command(left, self.config), _limit_command(right, self.config))
+            self._target = _limit_pair(left, right, self.config)
             self._target_time = time.monotonic()
 
     def stop(self) -> None:
