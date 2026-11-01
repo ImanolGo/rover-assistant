@@ -136,14 +136,15 @@ class Selector(Protocol):
 | Gemma 4 E2B Q4_K_M (`-c 2048 --cache-ram 0`) | llama-server, GPU | ~3.0 GB | **4.9 GB** RSS (weights + mmproj + KV + CUDA arena) |
 | mmproj (vision + audio, q8_0) | llama-server, GPU | ~1.0 GB | included above (~0.53 GB file) |
 | YOLO11n TRT FP16 + ByteTrack + torch/ultralytics + camera | brain, GPU | ~0.3 GB | **~1.3 GB** RSS (torch/ultralytics dominate) |
-| whisper.cpp base.en | — | ~0.2 GB | **dropped** — STT is Moonshine tiny (CPU, ~+191 MB in the brain); Gemma audio selectable |
+| whisper.cpp base.en | — | ~0.2 GB | **dropped** — STT is Moonshine small (CPU, ~+239 MB in the brain; tiny was +191 MB); Gemma audio selectable |
 | Piper + openWakeWord + Silero + app + camera buffers | brain, CPU | ~0.4 GB | Piper ~0.15 GB |
 | nvargus-daemon | — | — | ~0.31 GB |
 | **Total / MemAvailable** | | ~5.9 GB | **~7.3 GB used → MemAvailable ~0.57 GB** |
 
 > **Correction (2026-10-02):** the 574–623 MB floor below was depressed by
 > ollama + jtop pinning CMA. With them stopped, the clean floor is **~920 MB**
-> (30-min soak), and **~729 MB** with Moonshine tiny resident (STATUS decision log).
+> (30-min soak), **~729 MB** with Moonshine tiny resident, and **~598 MB** with
+> Moonshine small, the current default (STATUS decision log 2026-10-28).
 >
 > **Measured deviation (original G1 run):** the 800 MB `MemAvailable` gate criterion was **not met**
 > on 8 GB with Q4_K_M (steady 574–623 MB). The stack is nonetheless stable:

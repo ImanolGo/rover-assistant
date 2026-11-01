@@ -98,7 +98,7 @@ dozen nodes), **no depth model** (distance from object height in frame), and
 | USB speaker (48 kHz stereo) | Voice output |
 
 Models shipped on-device (~6 GB total): Gemma 4 E2B Q4_K_M + mmproj,
-Moonshine tiny streaming (STT), Piper lessac-medium, YOLO11n TensorRT FP16, and a custom
+Moonshine small streaming (STT), Piper lessac-medium, YOLO11n TensorRT FP16, and a custom
 "Hey Rover" openWakeWord model. Exact filenames and SHA256s live in
 [models/MODELS.md](models/MODELS.md).
 
@@ -112,7 +112,6 @@ rover-assistant/
 ├── hardware_tests/   tests that need the real robot, run manually, wheels up
 ├── tests/            laptop-only pytest — must pass at every commit
 ├── scripts/          model downloads, llama.cpp build, YOLO export
-├── deploy/           systemd units + install script (Phase 7, not yet written)
 └── assets/           wake-word clips, UI sounds, test images
 ```
 
@@ -168,7 +167,9 @@ jetson:repos/rover-assistant`. Pushing is refused if the Jetson tree is dirty
 
 Under active development — see [STATUS.md](STATUS.md) for the honest, current
 state. Measurement (Phase 1), the hardware layer, perception and the voice front
-end are done; the brain (planner, skills, mission loop — Phase 5) is next.
+end are done. The brain (planner, skills, mission loop — Phase 5) is in
+progress: it runs in the laptop sim and wheels-up; floor tests are next.
+Systemd units and an install script (`deploy/`) come in Phase 7.
 
 ## License
 

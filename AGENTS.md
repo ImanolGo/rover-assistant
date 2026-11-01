@@ -36,7 +36,8 @@ testable Python project.
    - First run of any motion code is wheels-up (robot on a box).
 5. **Measure, don't guess.** Every performance claim in `STATUS.md` needs a
    number produced by a script in `bench/`, with date, power mode and commit hash.
-6. **Keep it small.** Target < 3,000 lines of Python in `src/` (legacy: ~21k).
+6. **Keep it small.** Budget < 4,500 lines of Python in `src/` for v1 incl. Phase 5
+   (legacy: ~21k; was 3,000, see STATUS decision log 2026-10-29).
    Prefer deleting to abstracting. No plugin systems, no config-loader frameworks.
 7. **No cloud.** Nothing at runtime may call the internet. Model downloads
    happen only in `scripts/`.
@@ -62,8 +63,9 @@ testable Python project.
 - **Motor deadband:** the wheels do nothing below |0.25|, start at ~0.3 and
   turn strongly at 0.4. Commands below the floor must be mapped up to
   `min_wheel_pwm` (0.3) or set to zero: below 0.15 → 0, from 0.15 up → 0.3.
-- **IMU:** the base IMU gyro has a ~0.36 rad/s constant bias. Calibrate at
-  startup before trusting yaw.
+- **IMU:** the gyro bias is measured at every boot (legacy saw ~0.36 rad/s; 2026-10
+  boots measured ~0). Never use the firmware yaw (see rule 4): heading = integrated,
+  bias-corrected gyro z.
 - **Audio:** mic is `USB PnP Sound Device` (16 kHz mono via `plughw`). Speaker
   is `UACDemoV1.0` (native 48 kHz **stereo** S16). ALSA card numbers can change
   across boots, so select devices by name.
