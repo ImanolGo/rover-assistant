@@ -91,6 +91,7 @@ class App:
             spin_speed=config.rover.spin_speed_cap,
             half_fov_deg=self.geometry.fov_h_deg() / 2.0,
             h_stops=config.perception.target_classes_h_stop,
+            prepare_frame=self.geometry.undistort,  # ARCHITECTURE §5: Gemma frames only
         )
 
     # --- perception loop -----------------------------------------------------
@@ -271,7 +272,12 @@ class App:
         elif name in ("forward", "backward"):
             m.nudge(v if name == "forward" else -v)
         elif name == "unknown" and raw:
-            call = self.gemma.plan(raw)
+            try:
+                call = self.gemma.plan(raw)
+            except Exception as exc:  # noqa: BLE001 - llama-server down is a soft failure
+                print(f"gemma unavailable: {type(exc).__name__}: {exc}", flush=True)
+                self.say("Sorry, I can't think right now.")
+                return
             if call is None:
                 self.say("Sorry, I didn't understand.")
             elif call.tool == "stop":
@@ -283,7 +289,12 @@ class App:
                 degrees = float(call.args.get("degrees", 90) or 90)
                 m.turn(degrees if left else -degrees)
             else:
-                attributes = tuple(call.args.get("attributes") or ())
+                attrs = call.args.get("attributes") or ()
+                if isinstance(attrs, dict):  # {"colour": "red"} -> ("red",)
+                    attrs = attrs.values()
+                elif isinstance(attrs, str):
+                    attrs = attrs.split()
+                attributes = tuple(str(a).lower() for a in attrs)
                 question = str(call.args.get("question") or raw)
                 self._execute(call.tool, call.args.get("target"), attributes, question)
 
@@ -316,7 +327,9 @@ class App:
     def status(self) -> dict[str, Any]:
         with self._lock:
             snapshot = self._snapshot
-        bearing = snapshot.detections[0].bearing_deg if snapshot.detections else None
+        # the most prominent detection (tallest box), not whichever YOLO listed first
+        top = max(snapshot.detections, key=lambda d: d.h_frac, default=None)
+        bearing = top.bearing_deg if top is not None else None
         return {
             "state": self.state,
             "fps": round(self.fps, 1),

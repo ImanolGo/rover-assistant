@@ -167,3 +167,41 @@ def test_a_flickering_detection_does_not_halt_the_approach(tmp_path):
     mission.cancel()
     assert "REACQUIRE" not in body.states  # dropouts shorter than HOLD_S are not a loss
     assert body.drives and all(d != (0.0, 0.0) for d in body.drives[:-1])
+
+
+def test_a_blocked_old_mission_stays_cancelled_after_a_new_one_starts(tmp_path):
+    """A run that outlives the 2 s join (TTS / Gemma) must not drive or reset IDLE."""
+    import threading
+
+    release = threading.Event()
+    body = Body(lambda b: [])
+    mission = _mission(body, Gemma(), tmp_path)
+
+    def stale():
+        release.wait(5.0)  # blocked, e.g. in say() or a Gemma call
+        mission.motor.drive(0.35, 0.35)
+
+    mission.join_timeout_s = 0.05
+    mission.start(stale)
+    old = mission._thread
+    mission.start(lambda: release.wait(5.0))  # the join times out on the blocked run
+    release.set()
+    old.join(2.0)
+    mission._thread.join(2.0)
+    assert (0.35, 0.35) not in body.drives  # failed before the fix
+    assert body.states.count("IDLE") == 1  # only the newer run reports IDLE
+
+
+def test_frames_for_gemma_are_prepared_and_detections_are_not(tmp_path):
+    seen = []
+
+    class Recording(Gemma):
+        def ask_image(self, frame, prompt, max_tokens=80):
+            seen.append(frame)
+            return "A cup."
+
+    body = Body(lambda b: [_det()])
+    mission = _mission(body, Recording(), tmp_path)
+    mission.prepare_frame = lambda frame: frame + 1
+    _run(mission, mission.describe, "What do you see?")
+    assert seen and int(seen[0].max()) == 1  # undistorted copy, not the raw frame

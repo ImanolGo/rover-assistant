@@ -41,7 +41,7 @@ rover:
   spin_speed_cap: 0.5           # in-place spins only: skid-steer stalls below ~0.5 on a hard floor (2026-10-29)
   min_wheel_pwm: 0.30           # (legacy) deadband: no motion below ~0.25; <0.15 -> 0, else >= 0.30
   feedback: true                # T=131 continuous feedback (battery, IMU)
-  gyro_bias_calibrate_s: 2.0    # (legacy) ~0.36 rad/s bias
+  gyro_bias_calibrate_s: 2.0    # measured per boot (legacy saw ~0.36 rad/s; 2026-10 boots ~0)
   low_battery_v: 10.5           # (tune) legacy saw 12.2 V charged, ~10.0 V flat
 
 control:
@@ -59,6 +59,7 @@ control:
   verify_frames: 3
   verify_min_conf: 0.5
   max_replans: 2
+  max_mission_s: 120             # go_to gives up after this long
 
 audio:
   mic_name: "USB PnP Sound Device"   # (legacy) select by name, card numbers move
@@ -81,7 +82,7 @@ voice:
   max_utterance_s: 10
   max_turn_s: 8                      # keep a turn open after a lone "Hey Rover"
   stt_backend: moonshine              # moonshine | gemma  (B3: Moonshine default, Gemma selectable)
-  moonshine_model: small              # tiny | small  (B1 real-mic 2026-10-28: small; see STATUS)
+  moonshine_model: small              # tiny | small | medium  (B1 real-mic 2026-10-28: small; see STATUS)
   moonshine_vad_threshold: 0.01      # libmoonshine's own VAD drifts deaf at default; not 0
   tts_voice: models/piper/en_US-lessac-medium.onnx     # (legacy voice)
   wake_sound: assets/audio/notify_asc.wav
@@ -95,7 +96,7 @@ planner:
   image_max_tokens: 70
   timeout_s: 8
 
-llama_server:                       # used by deploy/systemd/rover-llama.service
+llama_server:                       # mirrored in scripts/llama_up.sh (keep in sync); systemd unit is Phase 7
   binary: ~/llama.cpp/build/bin/llama-server
   model: models/gemma/gemma-4-E2B-it-Q4_K_M.gguf
   mmproj: models/gemma/mmproj-gemma4-e2b-q8_0.gguf

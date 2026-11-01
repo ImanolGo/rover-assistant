@@ -82,3 +82,9 @@ def test_arrival_needs_detector_colour_and_gemma():
     assert verify_arrival([0.6, 0.6, 0.6], True, gemma("No"), "red cup") == (False, "gemma")
     assert verify_arrival([0.6, 0.6, 0.6], True, gemma("Yes."), "red cup") == (True, "ok")
     assert "'red cup'" in asked[-1]
+
+
+def test_parse_tool_call_accepts_nested_attributes():
+    call = parse_tool_call('{"tool": "go_to", "target": "cup", "attributes": {"colour": "red"}}')
+    assert call == ToolCall("go_to", {"target": "cup", "attributes": {"colour": "red"}})
+    assert parse_tool_call('noise {"tool": "nope"}') is None

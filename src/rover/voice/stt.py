@@ -211,7 +211,9 @@ class FakeStt:
 
 def moonshine_arch(model: str) -> str:
     """Model name -> Moonshine ``ModelArch`` member name."""
-    return "SMALL_STREAMING" if model == "small" else "TINY_STREAMING"
+    if model not in ("tiny", "small", "medium"):
+        raise ValueError(f"unknown moonshine model {model!r} (tiny | small | medium)")
+    return f"{model.upper()}_STREAMING"
 
 
 def make_stt(config: object, url: str, keyterms: list[str] | None = None) -> Stt:

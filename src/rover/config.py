@@ -55,6 +55,7 @@ class ControlConfig:
     verify_frames: int = 3
     verify_min_conf: float = 0.5
     max_replans: int = 2
+    max_mission_s: float = 120.0
 
 
 @dataclass

@@ -51,15 +51,16 @@ class ToolCall:
 def parse_tool_call(text: str) -> ToolCall | None:
     """First JSON object in ``text`` naming a known tool (code fences tolerated)."""
     cleaned = re.sub(r"```(?:json)?", "", text or "")
-    match = re.search(r"\{[^{}]*\}", cleaned)
-    if not match:
-        return None
-    try:
-        data = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    tool = str(data.pop("tool", "")) if isinstance(data, dict) else ""
-    return ToolCall(tool, data) if tool in TOOLS else None
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", cleaned):
+        try:
+            data, _ = decoder.raw_decode(cleaned, match.start())  # nested objects OK
+        except json.JSONDecodeError:
+            continue
+        if isinstance(data, dict):
+            tool = str(data.pop("tool", ""))
+            return ToolCall(tool, data) if tool in TOOLS else None
+    return None
 
 
 def encode_image(frame: np.ndarray, quality: int = 85) -> str:

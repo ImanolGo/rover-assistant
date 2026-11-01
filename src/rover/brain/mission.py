@@ -6,6 +6,10 @@ the newest detections, asks the selector for a skill, runs it, and logs the
 decision. The mission drives through a *body* (the app: ``snapshot``, ``drive``,
 ``halt``, ``heading_deg``, ``say``, ``set_state``), so barge-in stop follows the
 wheels and a spoken stop cancels it via :meth:`Mission.cancel`.
+
+Each run owns its cancel event (bound to its thread), so a mission that outlives
+the 2 s join (blocked in TTS or a Gemma call) stays cancelled when a newer one
+starts: it can no longer drive or reset the state to IDLE.
 """
 
 from __future__ import annotations
@@ -35,35 +39,54 @@ class _Motor:
         self._drive = body.drive
 
     def drive(self, left: float, right: float) -> None:
-        with self.mission._lock:
+        with self.mission._lock:  # cancelled() is the *calling* run's event
             if not self.mission.cancelled():
                 self._drive(left, right)
 
 
 class Mission:
-    def __init__(self, body, gemma, selector, log, control, spin_speed, half_fov_deg, h_stops):
+    def __init__(
+        self,
+        body,
+        gemma,
+        selector,
+        log,
+        control,
+        spin_speed,
+        half_fov_deg,
+        h_stops,
+        prepare_frame: Callable[[Any], Any] | None = None,
+    ):
         self.body, self.gemma, self.selector, self.log = body, gemma, selector, log
         self.control, self.spin_speed, self.half_fov = control, spin_speed, half_fov_deg
         self.h_stops = dict(h_stops or {})
+        self.prepare_frame = prepare_frame  # e.g. undistort: frames sent to Gemma only
         self._lock = threading.Lock()
         self.motor = _Motor(self, body)
-        self._cancel = threading.Event()
+        self._cancel = threading.Event()  # the newest run's event
+        self._local = threading.local()  # .cancel = the event of the run on this thread
         self._thread: threading.Thread | None = None
+        self.join_timeout_s = 2.0
 
     # --- lifecycle -------------------------------------------------------------
 
     def start(self, run: Callable[..., None], *args: Any) -> None:
         """Cancel any running mission, then run ``run(*args)`` on a fresh thread."""
         self.cancel()
-        self._cancel = threading.Event()
-        self._thread = threading.Thread(target=self._guard, args=(run, args), daemon=True)
+        if self._thread is not None and self._thread.is_alive():
+            print("mission: previous run still blocked; it stays cancelled", flush=True)
+        event = threading.Event()
+        self._cancel = event
+        self._thread = threading.Thread(target=self._guard, args=(event, run, args), daemon=True)
         self._thread.start()
 
-    def _guard(self, run: Callable[..., None], args: tuple) -> None:
+    def _guard(self, event: threading.Event, run: Callable[..., None], args: tuple) -> None:
+        self._local.cancel = event
         try:
             run(*args)
         except Exception as exc:  # noqa: BLE001 - a mission must never kill the brain
-            self.body.halt()
+            if not self.cancelled():  # a stale run must not halt its successor
+                self.body.halt()
             print(f"mission failed: {type(exc).__name__}: {exc}", flush=True)
             self.body.say("Sorry, something went wrong.")
         finally:
@@ -75,13 +98,17 @@ class Mission:
             self._cancel.set()
         thread = self._thread
         if join and thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=2.0)
+            thread.join(timeout=self.join_timeout_s)
+
+    def _event(self) -> threading.Event:
+        """The calling mission run's event; the newest run's from other threads."""
+        return getattr(self._local, "cancel", None) or self._cancel
 
     def cancelled(self) -> bool:
-        return self._cancel.is_set()
+        return self._event().is_set()
 
     def wait(self, seconds: float) -> None:
-        self._cancel.wait(seconds)
+        self._event().wait(seconds)
 
     # --- missions --------------------------------------------------------------
 
@@ -102,6 +129,8 @@ class Mission:
     def ask(self, frame: Any, prompt: str) -> str:
         """Gemma vision question; "" when llama-server is down or errors (soft failure)."""
         try:
+            if frame is not None and self.prepare_frame is not None:
+                frame = self.prepare_frame(frame)
             return self.gemma.ask_image(frame, prompt)
         except Exception as exc:  # noqa: BLE001 - a dead planner must not end the mission
             print(f"gemma unavailable: {type(exc).__name__}: {exc}", flush=True)

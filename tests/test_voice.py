@@ -10,6 +10,7 @@ import wave
 
 import httpx
 import numpy as np
+import pytest
 
 from rover.hal.audio import AlsaSpeaker, AudioConfig, NullSpeaker, drain_fd
 from rover.voice.stt import (
@@ -204,7 +205,9 @@ def test_moonshine_stream_final_then_cancel_closes_once():
 def test_moonshine_arch_mapping():
     assert moonshine_arch("tiny") == "TINY_STREAMING"
     assert moonshine_arch("small") == "SMALL_STREAMING"
-    assert moonshine_arch("anything-else") == "TINY_STREAMING"
+    assert moonshine_arch("medium") == "MEDIUM_STREAMING"
+    with pytest.raises(ValueError):
+        moonshine_arch("anything-else")  # a typo must not silently load tiny
 
 
 def test_make_stt_selects_gemma_backend():
